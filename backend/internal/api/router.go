@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Pacerino/cpm/embed"
-	"github.com/Pacerino/cpm/internal/api/handler"
+	"github.com/Pacerino/CaddyProxyManager/embed"
+	"github.com/Pacerino/CaddyProxyManager/internal/api/handler"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"

@@ -1,6 +1,6 @@
 package config
 
-import "github.com/Pacerino/cpm/internal/logger"
+import "github.com/Pacerino/CaddyProxyManager/internal/logger"
 
 // IsSetup defines whether we have an admin user or not
 var IsSetup bool

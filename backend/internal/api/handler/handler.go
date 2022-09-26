@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/Pacerino/cpm/internal/database"
+	"github.com/Pacerino/CaddyProxyManager/internal/database"
 
 	"gorm.io/gorm"
 )

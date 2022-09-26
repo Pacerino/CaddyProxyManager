@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	h "github.com/Pacerino/cpm/internal/api/http"
-	"github.com/Pacerino/cpm/internal/caddy"
-	"github.com/Pacerino/cpm/internal/database"
-	"github.com/Pacerino/cpm/internal/jobqueue"
+	h "github.com/Pacerino/CaddyProxyManager/internal/api/http"
+	"github.com/Pacerino/CaddyProxyManager/internal/caddy"
+	"github.com/Pacerino/CaddyProxyManager/internal/database"
+	"github.com/Pacerino/CaddyProxyManager/internal/jobqueue"
 
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Pacerino/cpm/embed"
-	"github.com/Pacerino/cpm/internal/config"
-	"github.com/Pacerino/cpm/internal/database"
-	"github.com/Pacerino/cpm/internal/logger"
+	"github.com/Pacerino/CaddyProxyManager/embed"
+	"github.com/Pacerino/CaddyProxyManager/internal/config"
+	"github.com/Pacerino/CaddyProxyManager/internal/database"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 
 	"github.com/aymerick/raymond"
 )

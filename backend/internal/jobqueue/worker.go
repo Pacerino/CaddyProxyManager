@@ -3,7 +3,7 @@ package jobqueue
 import (
 	"fmt"
 
-	"github.com/Pacerino/cpm/internal/logger"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 )
 
 // Worker responsible for queue serving.

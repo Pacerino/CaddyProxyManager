@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Pacerino/cpm/internal/logger"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 )
 
 const httpPort = 3001

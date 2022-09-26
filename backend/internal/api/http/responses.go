@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"reflect"
 
-	c "github.com/Pacerino/cpm/internal/api/context"
-	"github.com/Pacerino/cpm/internal/errors"
-	"github.com/Pacerino/cpm/internal/logger"
+	c "github.com/Pacerino/CaddyProxyManager/internal/api/context"
+	"github.com/Pacerino/CaddyProxyManager/internal/errors"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 
 	"github.com/qri-io/jsonschema"
 )

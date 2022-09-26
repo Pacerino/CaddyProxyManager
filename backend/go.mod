@@ -1,4 +1,4 @@
-module github.com/Pacerino/cpm
+module github.com/Pacerino/CaddyProxyManager
 
 go 1.19
 

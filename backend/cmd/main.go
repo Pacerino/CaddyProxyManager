@@ -5,11 +5,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Pacerino/cpm/internal/api"
-	"github.com/Pacerino/cpm/internal/config"
-	"github.com/Pacerino/cpm/internal/database"
-	"github.com/Pacerino/cpm/internal/jobqueue"
-	"github.com/Pacerino/cpm/internal/logger"
+	"github.com/Pacerino/CaddyProxyManager/internal/api"
+	"github.com/Pacerino/CaddyProxyManager/internal/config"
+	"github.com/Pacerino/CaddyProxyManager/internal/database"
+	"github.com/Pacerino/CaddyProxyManager/internal/jobqueue"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 )
 
 var (

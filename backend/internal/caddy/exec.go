@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/Pacerino/cpm/internal/config"
-	"github.com/Pacerino/cpm/internal/logger"
+	"github.com/Pacerino/CaddyProxyManager/internal/config"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 )
 
 func ReloadCaddy() error {

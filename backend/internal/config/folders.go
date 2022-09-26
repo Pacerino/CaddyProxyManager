@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Pacerino/cpm/internal/logger"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 )
 
 func createDataFolders() {
