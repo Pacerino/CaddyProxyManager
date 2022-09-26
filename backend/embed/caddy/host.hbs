@@ -1,0 +1,15 @@
+{{host.domains}} {
+{{#if host.upstreams}}
+	{{#if host.matcher}}
+		reverse_proxy {{host.matcher}} {{#each host.upstreams}} {{backend}} {{/each}}
+	{{else}}
+		reverse_proxy {{#each host.upstreams}} {{backend}} {{/each}}
+	{{/if}}
+{{/if}}
+
+{{#if LogPath}}
+	log {
+		output file {{LogPath}}
+	}
+{{/if}}
+}
