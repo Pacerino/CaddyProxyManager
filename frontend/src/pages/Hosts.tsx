@@ -11,6 +11,7 @@ import { joiResolver } from "@hookform/resolvers/joi";
 import Joi from "joi";
 import { HiAdjustments, HiTrash, HiDocumentAdd } from "react-icons/hi";
 import React from "react";
+import http, { RequestResponse } from "../utils/axios";
 
 type Domain = {
   fqdn: string;
@@ -104,10 +105,9 @@ function HostsPage() {
   }, []);
 
   const getHosts = async () => {
-    return await fetch(`http://${window.location.hostname}:3001/api/hosts`)
-      .then((res) => res.json())
-      .then((json) => {
-        setHostData(json);
+    return await http.get<RequestResponse>(`/hosts`)
+      .then((res) => {
+        setHostData(res.data);
       });
   };
 
@@ -122,22 +122,14 @@ function HostsPage() {
       upstreams: data.upstreams,
     };
     setLoading(true);
-    const res = await fetch(`http://${window.location.hostname}:3001/api/hosts`, {
-      body: JSON.stringify(jsonBody),
-      method: "POST",
-    });
-    if (res.status !== 200) {
-      // handle Error
-    }
+    await http.post(`hosts`, jsonBody);
     setLoading(false);
     setModal(false);
     getHosts();
   };
 
   const deleteHost = async (hostID: number) => {
-    await fetch(`http://${window.location.hostname}:3001/api/hosts/${hostID}`, {
-      method: "DELETE",
-    });
+    await http.delete(`/hosts/${hostID}`);
     getHosts();
   };
 

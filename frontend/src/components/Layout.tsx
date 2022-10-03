@@ -1,6 +1,10 @@
-import { Navbar } from "flowbite-react";
-import { Outlet } from "react-router-dom";
+import { Navbar, Button } from "flowbite-react";
+import { Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "../App";
 function Layout() {
+  const auth = useAuth();
+  const navigate = useNavigate();
+
   return (
     <div>
       <Navbar fluid={true} rounded={false}>
@@ -14,8 +18,18 @@ function Layout() {
             Caddy Proxy Manager
           </span>
         </Navbar.Brand>
+
+        {auth.user && (
+          <div className="flex md:order-2">
+            <Button onClick={() => auth.signout(() => navigate("/"))}>
+              Logout
+            </Button>
+            <Navbar.Toggle />
+          </div>
+        )}
+
         <Navbar.Collapse>
-{/*           <Navbar.Link href="/home">Home</Navbar.Link>
+          {/*           <Navbar.Link href="/home">Home</Navbar.Link>
           <Navbar.Link href="/hosts">Hosts</Navbar.Link> */}
         </Navbar.Collapse>
       </Navbar>

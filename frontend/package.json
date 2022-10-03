@@ -11,6 +11,7 @@
     "@types/node": "^16.11.59",
     "@types/react": "^18.0.20",
     "@types/react-dom": "^18.0.6",
+    "axios": "^0.27.2",
     "flowbite": "^1.5.3",
     "flowbite-react": "^0.1.11",
     "joi": "^17.6.0",
