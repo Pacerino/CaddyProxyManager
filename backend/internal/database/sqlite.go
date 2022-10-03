@@ -16,7 +16,7 @@ var dbInstance *gorm.DB
 func NewDB() {
 	logger.Info("Creating new DB instance")
 	dbInstance = SqliteDB()
-	dbInstance.AutoMigrate(&Host{}, &Upstream{})
+	dbInstance.AutoMigrate(&Host{}, &Upstream{}, &User{})
 }
 
 // GetInstance returns an existing or new instance

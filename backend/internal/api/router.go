@@ -7,6 +7,7 @@ import (
 
 	"github.com/Pacerino/CaddyProxyManager/embed"
 	"github.com/Pacerino/CaddyProxyManager/internal/api/handler"
+	"github.com/Pacerino/CaddyProxyManager/internal/api/middleware"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -26,6 +27,7 @@ func NewRouter() http.Handler {
 
 	r.Use(
 		cors,
+		middleware.DecodeAuth(),
 	)
 
 	return generateRoutes(r, h)
@@ -35,12 +37,22 @@ func generateRoutes(r chi.Router, h *handler.Handler) chi.Router {
 	r.Route("/api", func(r chi.Router) {
 
 		//Hosts
-		r.Route("/hosts", func(r chi.Router) {
+		r.With(middleware.Enforce()).Route("/hosts", func(r chi.Router) {
 			r.Get("/", h.GetHosts())                     // Get List of Hosts
 			r.Post("/", h.CreateHost())                  // Create Host & save to the DB
 			r.Get("/{hostID:[0-9]+}", h.GetHost())       // Get specific Host by ID
 			r.Delete("/{hostID:[0-9]+}", h.DeleteHost()) // Delete Host by ID
 			r.Put("/", h.UpdateHost())                   // Update Host by ID
+		})
+
+		//User
+		r.Route("/users", func(r chi.Router) {
+			r.Post("/login", h.UserLogin())                                         // Login a User
+			r.With(middleware.Enforce()).Get("/", h.GetUsers())                     // Get a list of Users
+			r.With(middleware.Enforce()).Post("/", h.CreateUser())                  // Create a User
+			r.With(middleware.Enforce()).Get("/{userID:[0-9]+}", h.GetUser())       // Get a User by ID
+			r.With(middleware.Enforce()).Delete("/{userID:[0-9]+}", h.DeleteUser()) // Delete User by ID
+			r.With(middleware.Enforce()).Put("/", h.UpdateUser())                   // Update Host by ID
 		})
 	})
 	fileServer(r)

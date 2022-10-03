@@ -3,6 +3,8 @@ package context
 var (
 	// BodyCtxKey is the name of the Body value on the context
 	BodyCtxKey = &contextKey{"Body"}
+	// UserIDCtxKey is the name of the UserID value on the context
+	UserIDCtxKey = &contextKey{"UserID"}
 	// PrettyPrintCtxKey is the name of the pretty print context
 	PrettyPrintCtxKey = &contextKey{"Pretty"}
 )
