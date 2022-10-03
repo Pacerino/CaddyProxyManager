@@ -41,7 +41,7 @@ func (s Handler) UserLogin() func(http.ResponseWriter, *http.Request) {
 				return
 			} else {
 				// if the user was found but there is an error, throw it also
-				h.ResultErrorJSON(w, r, http.StatusBadGateway, err.Error(), nil)
+				h.ResultErrorJSON(w, r, http.StatusUnauthorized, err.Error(), nil)
 				return
 			}
 		}

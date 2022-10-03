@@ -31,7 +31,7 @@ func PeformLogin(email, pass string) (GeneratedResponse, error) {
 	// Compare stored PW and given PW
 	err = bcrypt.CompareHashAndPassword([]byte(user.Secret), []byte(pass))
 	if err != nil {
-		return GeneratedResponse{}, errors.New("username or Password is wrong")
+		return GeneratedResponse{}, errors.New("username or password is wrong")
 	}
 	// Everything seems legit, generate JWT
 	jwtData, err := Generate(&user)
