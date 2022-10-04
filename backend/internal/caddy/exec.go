@@ -1,44 +1,28 @@
 package caddy
 
 import (
-	"fmt"
-	"os/exec"
+	"context"
+	"time"
 
-	"github.com/Pacerino/CaddyProxyManager/internal/config"
 	"github.com/Pacerino/CaddyProxyManager/internal/logger"
+	"github.com/coreos/go-systemd/v22/dbus"
 )
 
 func ReloadCaddy() error {
-	_, err := shExec([]string{"reload", "--config", config.Configuration.CaddyFile})
-	return err
-}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-func getCaddyFilePath() (string, error) {
-	path, err := exec.LookPath("caddy")
+	conn, err := dbus.NewSystemdConnectionContext(ctx)
 	if err != nil {
-		return path, fmt.Errorf("cannot find caddy execuatable script in PATH")
+		return err
 	}
-	return path, nil
-}
-
-// shExec executes caddy with arguments
-func shExec(args []string) (string, error) {
-	ng, err := getCaddyFilePath()
+	defer conn.Close()
+	resChan := make(chan string)
+	_, err = conn.ReloadOrRestartUnitContext(ctx, "caddy.service", "replace", resChan)
 	if err != nil {
-		logger.Error("CaddyError", err)
-		return "", err
+		logger.Error("", err)
+		return err
 	}
-
-	logger.Debug("CMD: %s %v", ng, args)
-	// nolint: gosec
-	c := exec.Command(ng, args...)
-
-	b, e := c.Output()
-
-	if e != nil {
-		logger.Error("CaddyError", fmt.Errorf("command error: %s -- %v\n%+v", ng, args, e))
-		logger.Warn(string(b))
-	}
-
-	return string(b), e
+	<-resChan
+	return nil
 }

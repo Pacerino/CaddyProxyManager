@@ -35,9 +35,11 @@ require (
 )
 
 require (
+	github.com/coreos/go-systemd/v22 v22.4.0
 	github.com/fatih/color v1.13.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/mattn/go-sqlite3 v1.14.15 // indirect
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/vrischmann/envconfig v1.3.0
