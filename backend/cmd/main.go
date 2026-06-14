@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/Pacerino/CaddyProxyManager/internal/api"
+	"github.com/Pacerino/CaddyProxyManager/internal/auth"
 	"github.com/Pacerino/CaddyProxyManager/internal/config"
 	"github.com/Pacerino/CaddyProxyManager/internal/database"
 	"github.com/Pacerino/CaddyProxyManager/internal/jobqueue"
@@ -19,6 +20,9 @@ var (
 
 func main() {
 	config.Init(&version, &commit)
+	if err := auth.EnsureKey(); err != nil {
+		logger.Error("KeyBootstrapError", err)
+	}
 	database.NewDB()
 	jobqueue.Start()
 

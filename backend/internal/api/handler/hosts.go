@@ -9,7 +9,6 @@ import (
 	"github.com/Pacerino/CaddyProxyManager/internal/database"
 	"github.com/Pacerino/CaddyProxyManager/internal/jobqueue"
 
-	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 )
 
@@ -55,7 +54,6 @@ func (s Handler) CreateHost() func(http.ResponseWriter, *http.Request) {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		validate := validator.New()
 		if err := validate.Struct(newHost); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
@@ -67,10 +65,16 @@ func (s Handler) CreateHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		provider, err := caddy.GetProvider()
+		if err != nil {
+			h.ResultErrorJSON(w, r, http.StatusInternalServerError, err.Error(), nil)
+			return
+		}
+
 		if err := jobqueue.AddJob(jobqueue.Job{
 			Name: "CaddyConfigureHost",
 			Action: func() error {
-				return caddy.WriteHost(newHost)
+				return provider.WriteHost(newHost)
 			},
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
@@ -91,16 +95,21 @@ func (s Handler) UpdateHost() func(http.ResponseWriter, *http.Request) {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		validate := validator.New()
 		if err := validate.Struct(newHost); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+
+		provider, err := caddy.GetProvider()
+		if err != nil {
+			h.ResultErrorJSON(w, r, http.StatusInternalServerError, err.Error(), nil)
 			return
 		}
 
 		if err := jobqueue.AddJob(jobqueue.Job{
 			Name: "CaddyConfigureHost",
 			Action: func() error {
-				return caddy.WriteHost(newHost)
+				return provider.WriteHost(newHost)
 			},
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
@@ -128,10 +137,16 @@ func (s Handler) DeleteHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		provider, err := caddy.GetProvider()
+		if err != nil {
+			h.ResultErrorJSON(w, r, http.StatusInternalServerError, err.Error(), nil)
+			return
+		}
+
 		if err := jobqueue.AddJob(jobqueue.Job{
 			Name: "CaddyConfigureHost",
 			Action: func() error {
-				return caddy.RemoveHost(hostID)
+				return provider.RemoveHost(hostID)
 			},
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
