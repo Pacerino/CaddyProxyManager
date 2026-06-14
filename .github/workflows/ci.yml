@@ -1,0 +1,189 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+  packages: write
+
+# Cancel superseded runs for the same ref. Useful on a single self-hosted
+# runner so a new push doesn't queue behind an outdated run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  test-backend:
+    name: Test backend
+    runs-on: self-hosted
+    # The project uses a pure-Go sqlite driver, so no C toolchain is needed.
+    env:
+      CGO_ENABLED: "0"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: backend/go.sum
+      # The backend embeds frontend assets; provide a placeholder so it builds.
+      - name: Create embed placeholder
+        run: mkdir -p embed/assets && echo "<!doctype html>" > embed/assets/index.html
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -count=1 ./...
+
+  test-frontend:
+    name: Build frontend
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci || npm install
+      - name: Type-check and build
+        run: |
+          mkdir -p ../backend/embed/assets
+          npm run build
+
+  docker:
+    name: Build & publish image
+    runs-on: self-hosted
+    needs: [test-backend, test-frontend]
+    # Only push on master pushes and version tags, not on PRs.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+          # Local cache persists on the self-hosted runner's disk between runs.
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      # Replace the old cache with the new one to keep it from growing
+      # unbounded across runs.
+      - name: Rotate build cache
+        if: always()
+        run: |
+          rm -rf /tmp/.buildx-cache
+          if [ -d /tmp/.buildx-cache-new ]; then
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          fi
+
+  release:
+    name: Build binaries & release
+    runs-on: self-hosted
+    needs: [test-backend, test-frontend]
+    # Only build downloadable binaries and a release on version tags.
+    if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Build the SPA so it gets embedded into every binary.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci || npm install
+          npm run build
+
+      # Cross-compile a static, pure-Go binary for each target and package it.
+      - name: Build binaries
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA::8}"
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}"
+          OUT="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$OUT"
+
+          targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
+          for t in $targets; do
+            os="${t%/*}"; arch="${t#*/}"
+            name="caddyproxymanager_${VERSION}_${os}_${arch}"
+            bin="cpm"
+            [ "$os" = "windows" ] && bin="cpm.exe"
+            echo "Building $name"
+            GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/main.go
+            if [ "$os" = "windows" ]; then
+              zip -j "$OUT/${name}.zip" "$bin"
+            else
+              tar -czf "$OUT/${name}.tar.gz" "$bin"
+            fi
+            rm -f "$bin"
+          done
+
+          cd "$OUT"
+          sha256sum * > checksums.txt
+          ls -la
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
