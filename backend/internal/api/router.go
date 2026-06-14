@@ -8,6 +8,8 @@ import (
 	"github.com/Pacerino/CaddyProxyManager/embed"
 	"github.com/Pacerino/CaddyProxyManager/internal/api/handler"
 	"github.com/Pacerino/CaddyProxyManager/internal/api/middleware"
+	"github.com/Pacerino/CaddyProxyManager/internal/config"
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -45,6 +47,13 @@ func generateRoutes(r chi.Router, h *handler.Handler) chi.Router {
 			r.Put("/", h.UpdateHost())                   // Update Host by ID
 		})
 
+		//Auth
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/config", h.AuthConfig())          // Which auth mode is active
+			r.Get("/oidc/login", h.OIDCLogin())       // Begin OIDC login
+			r.Get("/oidc/callback", h.OIDCCallback()) // OIDC provider redirect
+		})
+
 		//User
 		r.Route("/users", func(r chi.Router) {
 			r.Post("/login", h.UserLogin())                                         // Login a User
@@ -59,15 +68,37 @@ func generateRoutes(r chi.Router, h *handler.Handler) chi.Router {
 	return r
 }
 
+// frontendFS returns the filesystem used to serve the SPA. When
+// CPM_FRONTENDDIR is set the assets are served from disk, otherwise the
+// assets embedded in the binary are used.
+func frontendFS() http.FileSystem {
+	if dir := config.Configuration.FrontendDir; dir != "" {
+		logger.Info("Serving frontend from external directory: %s", dir)
+		return http.Dir(dir)
+	}
+	fSys, err := fs.Sub(embed.Assets, "assets")
+	if err != nil {
+		panic(err)
+	}
+	return http.FS(fSys)
+}
+
 func fileServer(r chi.Router) {
+	root := frontendFS()
+	fileSrv := http.FileServer(root)
+
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		rctx := chi.RouteContext(r.Context())
-		pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
-		fSys, err := fs.Sub(embed.Assets, "assets")
-		if err != nil {
-			panic(err)
+		// Serve the requested file if it exists, otherwise fall back to
+		// index.html so client-side routing works (SPA behaviour).
+		upath := strings.TrimPrefix(r.URL.Path, "/")
+		if upath == "" {
+			upath = "index.html"
 		}
-		fs := http.StripPrefix(pathPrefix, http.FileServer(http.FS(fSys)))
-		fs.ServeHTTP(w, r)
+		if f, err := root.Open(upath); err != nil {
+			r.URL.Path = "/"
+		} else {
+			f.Close()
+		}
+		fileSrv.ServeHTTP(w, r)
 	})
 }
