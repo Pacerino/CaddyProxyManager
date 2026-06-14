@@ -9,7 +9,7 @@ import (
 	"github.com/Pacerino/CaddyProxyManager/internal/auth"
 	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 	"github.com/go-chi/jwtauth/v5"
-	"github.com/lestrrat-go/jwx/jwt"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 )
 
 // DecodeAuth decodes an auth header

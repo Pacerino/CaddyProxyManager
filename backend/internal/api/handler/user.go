@@ -9,7 +9,6 @@ import (
 	"github.com/Pacerino/CaddyProxyManager/internal/auth"
 	"github.com/Pacerino/CaddyProxyManager/internal/database"
 	"github.com/Pacerino/CaddyProxyManager/internal/logger"
-	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 )
 
@@ -22,13 +21,16 @@ type LoginData struct {
 // Route: GET /users/login
 func (s Handler) UserLogin() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if auth.IsOIDCEnabled() {
+			h.ResultErrorJSON(w, r, http.StatusBadRequest, "local login is disabled, use OIDC", nil)
+			return
+		}
 		var logindata LoginData
 		err := json.NewDecoder(r.Body).Decode(&logindata)
 		if err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		validate := validator.New()
 		if err := validate.Struct(logindata); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
@@ -95,7 +97,6 @@ func (s Handler) CreateUser() func(http.ResponseWriter, *http.Request) {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		validate := validator.New()
 		if err := validate.Struct(&newUser); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
@@ -151,7 +152,6 @@ func (s Handler) UpdateUser() func(http.ResponseWriter, *http.Request) {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		validate := validator.New()
 		if err := validate.Struct(newUser); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return

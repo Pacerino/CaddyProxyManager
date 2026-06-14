@@ -1,0 +1,10 @@
+**/node_modules
+frontend/dist
+frontend/.vite
+backend/embed/assets
+**/*.db
+.git
+.github
+*.md
+.weave
+.vscode
