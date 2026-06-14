@@ -12,8 +12,6 @@ RUN mkdir -p /app/backend/embed/assets && npm run build
 
 # ---- Backend build ----
 FROM golang:1.25-alpine AS backend
-# CGO is required by the sqlite driver (mattn/go-sqlite3).
-RUN apk add --no-cache build-base
 WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
@@ -23,7 +21,8 @@ COPY backend/ ./
 COPY --from=frontend /app/backend/embed/assets ./embed/assets
 ARG VERSION=dev
 ARG COMMIT=unknown
-RUN CGO_ENABLED=1 GOOS=linux go build \
+# Pure-Go build (the sqlite driver is CGO-free), so no C toolchain is needed.
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/cpm ./cmd/main.go
 
