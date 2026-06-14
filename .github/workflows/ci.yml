@@ -8,7 +8,7 @@ on:
     branches: [master]
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 # Cancel superseded runs for the same ref. Useful on a single self-hosted
@@ -119,3 +119,71 @@ jobs:
           if [ -d /tmp/.buildx-cache-new ]; then
             mv /tmp/.buildx-cache-new /tmp/.buildx-cache
           fi
+
+  release:
+    name: Build binaries & release
+    runs-on: self-hosted
+    needs: [test-backend, test-frontend]
+    # Only build downloadable binaries and a release on version tags.
+    if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Build the SPA so it gets embedded into every binary.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci || npm install
+          npm run build
+
+      # Cross-compile a static, pure-Go binary for each target and package it.
+      - name: Build binaries
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA::8}"
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}"
+          OUT="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$OUT"
+
+          targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
+          for t in $targets; do
+            os="${t%/*}"; arch="${t#*/}"
+            name="caddyproxymanager_${VERSION}_${os}_${arch}"
+            bin="cpm"
+            [ "$os" = "windows" ] && bin="cpm.exe"
+            echo "Building $name"
+            GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/main.go
+            if [ "$os" = "windows" ]; then
+              zip -j "$OUT/${name}.zip" "$bin"
+            else
+              tar -czf "$OUT/${name}.tar.gz" "$bin"
+            fi
+            rm -f "$bin"
+          done
+
+          cd "$OUT"
+          sha256sum * > checksums.txt
+          ls -la
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
