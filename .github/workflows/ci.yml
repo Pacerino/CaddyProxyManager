@@ -24,6 +24,9 @@ jobs:
   test-backend:
     name: Test backend
     runs-on: self-hosted
+    # CGO is required by the sqlite driver and by `go test -race`.
+    env:
+      CGO_ENABLED: "1"
     defaults:
       run:
         working-directory: backend
