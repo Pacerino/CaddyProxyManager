@@ -132,11 +132,11 @@ cd ../backend && go build ./cmd/main.go
 ### Testing
 
 ```bash
-cd backend && go test ./...       # backend (run with -race in CI)
+cd backend && go test ./...       # backend
 cd frontend && npm run build      # frontend type-check + build
 ```
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the backend tests with the race detector, builds the frontend, and publishes the Docker image to GHCR on pushes to `master` and version tags.
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the backend tests, builds the frontend, and publishes the Docker image to GHCR on pushes to `master` and version tags.
 
 ## 🐳 Building the image yourself
 
@@ -144,7 +144,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the backend tes
 docker build -t caddyproxymanager .
 ```
 
-The multi-stage build compiles the frontend and backend (CGO is required by the SQLite driver) into a small Alpine runtime that bundles Caddy.
+The multi-stage build compiles the frontend and backend (a pure-Go build, no C toolchain required) into a small Alpine runtime that bundles Caddy.
 
 ## ❓ FAQ
 

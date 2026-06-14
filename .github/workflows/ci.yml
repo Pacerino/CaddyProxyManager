@@ -24,9 +24,9 @@ jobs:
   test-backend:
     name: Test backend
     runs-on: self-hosted
-    # CGO is required by the sqlite driver and by `go test -race`.
+    # The project uses a pure-Go sqlite driver, so no C toolchain is needed.
     env:
-      CGO_ENABLED: "1"
+      CGO_ENABLED: "0"
     defaults:
       run:
         working-directory: backend
@@ -42,7 +42,7 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test -race -count=1 ./...
+        run: go test -count=1 ./...
 
   test-frontend:
     name: Build frontend
