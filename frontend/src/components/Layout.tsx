@@ -1,43 +1,36 @@
-import { Navbar, Button } from "flowbite-react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { useAuth } from "../App";
-function Layout() {
-  const auth = useAuth();
+import { LogOut, Server } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+
+export function Layout() {
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   return (
-    <div>
-      <Navbar fluid={true} rounded={false}>
-        <Navbar.Brand href="https://flowbite.com/">
-          <img
-            src="https://flowbite.com/docs/images/logo.svg"
-            className="mr-3 h-6 sm:h-9"
-            alt="Flowbite Logo"
-          />
-          <span className="self-center whitespace-nowrap text-xl font-semibold dark:text-white">
-            Caddy Proxy Manager
-          </span>
-        </Navbar.Brand>
-
-        {auth.user && (
-          <div className="flex md:order-2">
-            <Button onClick={() => auth.signout(() => navigate("/"))}>
-              Logout
-            </Button>
-            <Navbar.Toggle />
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Server className="size-5" />
+            <span className="text-lg font-semibold">Caddy Proxy Manager</span>
           </div>
-        )}
-
-        <Navbar.Collapse>
-          {/*           <Navbar.Link href="/home">Home</Navbar.Link>
-          <Navbar.Link href="/hosts">Hosts</Navbar.Link> */}
-        </Navbar.Collapse>
-      </Navbar>
-      <div className="container mx-auto py-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+          >
+            <LogOut className="size-4" />
+            Logout
+          </Button>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-6 py-8">
         <Outlet />
-      </div>
+      </main>
     </div>
   );
 }
-
-export default Layout;
