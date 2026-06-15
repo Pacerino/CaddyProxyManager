@@ -28,7 +28,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 
 # ---- Runtime ----
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates caddy
+# Install Caddy from the official static release rather than the Alpine package,
+# which can lag behind (older builds lack `list-modules --json`, used by CPM to
+# detect plugins). Pin the version here; TARGETARCH is provided by buildx.
+ARG CADDY_VERSION=2.11.4
+ARG TARGETARCH=amd64
+RUN apk add --no-cache ca-certificates \
+    && wget -qO /tmp/caddy.tar.gz \
+       "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_${TARGETARCH}.tar.gz" \
+    && tar -xzf /tmp/caddy.tar.gz -C /usr/local/bin caddy \
+    && rm /tmp/caddy.tar.gz \
+    && chmod +x /usr/local/bin/caddy \
+    && caddy version
 COPY --from=backend /out/cpm /usr/local/bin/cpm
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
