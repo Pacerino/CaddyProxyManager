@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -58,12 +59,13 @@ func GetPrivateKey() (*rsa.PrivateKey, error) {
 
 // LoadPemPrivateKey reads a key from a PEM encoded string and returns a private key
 func LoadPemPrivateKey(content []byte) (*rsa.PrivateKey, error) {
-	var key *rsa.PrivateKey
 	data, _ := pem.Decode(content)
-	var err error
-	key, err = x509.ParsePKCS1PrivateKey(data.Bytes)
+	if data == nil {
+		return nil, errors.New("no PEM data found in private key")
+	}
+	key, err := x509.ParsePKCS1PrivateKey(data.Bytes)
 	if err != nil {
-		return key, err
+		return nil, err
 	}
 	return key, nil
 }
@@ -90,11 +92,13 @@ func GetPublicKey() (*rsa.PublicKey, error) {
 
 // LoadPemPublicKey reads a key from a PEM encoded string and returns a public key
 func LoadPemPublicKey(content []byte) (*rsa.PublicKey, error) {
-	var key *rsa.PublicKey
 	data, _ := pem.Decode(content)
+	if data == nil {
+		return nil, errors.New("no PEM data found in public key")
+	}
 	publicKeyFileImported, err := x509.ParsePKCS1PublicKey(data.Bytes)
 	if err != nil {
-		return key, err
+		return nil, err
 	}
 
 	return publicKeyFileImported, nil

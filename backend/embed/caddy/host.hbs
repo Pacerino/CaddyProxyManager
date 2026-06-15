@@ -1,4 +1,11 @@
 {{host.domains}} {
+{{#if BasicAuth}}
+	basic_auth {
+{{#each BasicAuth}}
+		{{User}} {{Hash}}
+{{/each}}
+	}
+{{/if}}
 {{#if host.upstreams}}
 {{#if host.matcher}}
 	reverse_proxy {{host.matcher}}{{#each host.upstreams}} {{backend}}{{/each}}
