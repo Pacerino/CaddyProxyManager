@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { LoginPage } from "@/pages/Login";
 import { OIDCCallbackPage } from "@/pages/OIDCCallback";
 import { HostsPage } from "@/pages/Hosts";
+import { PluginsPage } from "@/pages/Plugins";
 import type { ReactNode } from "react";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -27,6 +28,7 @@ function App() {
         }
       >
         <Route path="/" element={<HostsPage />} />
+        <Route path="/plugins" element={<PluginsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

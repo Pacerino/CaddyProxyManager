@@ -56,6 +56,32 @@ func (p *APIProvider) WriteHost(h database.Host) error {
 	return p.do(http.MethodPost, path, route, nil)
 }
 
+// GetConfig returns the live Caddy configuration at the given path. Pass an
+// empty path for the full config. The result is decoded into out, which is
+// typically a *json.RawMessage or *map[string]any.
+func (p *APIProvider) GetConfig(path string, out any) error {
+	full := "/config/" + strings.TrimPrefix(strings.TrimPrefix(path, "/config/"), "/")
+	status, data, err := p.request(http.MethodGet, full, nil)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("caddy admin GET %s returned %d: %s", full, status, string(data))
+	}
+	if out == nil || len(data) == 0 {
+		return nil
+	}
+	return json.Unmarshal(data, out)
+}
+
+// PatchConfig merges body into the config at path using the admin API. Caddy's
+// PATCH replaces the value at the addressed path, so callers should send the
+// full object they want present at that path.
+func (p *APIProvider) PatchConfig(path string, body any) error {
+	full := "/config/" + strings.TrimPrefix(strings.TrimPrefix(path, "/config/"), "/")
+	return p.do(http.MethodPatch, full, body, nil)
+}
+
 // RemoveHost deletes the route for a host.
 func (p *APIProvider) RemoveHost(hostID int) error {
 	id := hostRouteID(uint(hostID))

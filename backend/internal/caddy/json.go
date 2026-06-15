@@ -1,6 +1,7 @@
 package caddy
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -25,19 +26,40 @@ func buildRoute(h database.Host) map[string]any {
 		upstreams = append(upstreams, map[string]any{"dial": u.Backend})
 	}
 
-	handler := map[string]any{
+	proxy := map[string]any{
 		"handler":   "reverse_proxy",
 		"upstreams": upstreams,
 	}
 
+	// Host plugin handlers (e.g. authentication) run before the reverse proxy.
+	handle := pluginHandlers(h)
+	handle = append(handle, proxy)
+
 	route := map[string]any{
 		"@id":      hostRouteID(h.ID),
-		"handle":   []map[string]any{handler},
+		"handle":   handle,
 		"match":    []map[string]any{{"host": hosts}},
 		"terminal": true,
 	}
 
 	return route
+}
+
+// pluginHandlers renders the enabled host plugin handlers for a host, in a
+// stable order. Invalid or empty handler JSON is skipped.
+func pluginHandlers(h database.Host) []map[string]any {
+	handlers := make([]map[string]any, 0, len(h.Plugins))
+	for _, p := range h.Plugins {
+		if !p.Enabled || len(p.Handler) == 0 {
+			continue
+		}
+		var handler map[string]any
+		if err := json.Unmarshal(p.Handler, &handler); err != nil || len(handler) == 0 {
+			continue
+		}
+		handlers = append(handlers, handler)
+	}
+	return handlers
 }
 
 // splitDomains turns a space separated domain list into a slice.

@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { HostPluginsSection } from "@/components/HostPluginsSection";
 import type { Host } from "@/lib/types";
 
 const schema = z.object({
@@ -183,6 +184,8 @@ export function HostDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        {host && <HostPluginsSection key={host.ID} host={host} />}
       </DialogContent>
     </Dialog>
   );
