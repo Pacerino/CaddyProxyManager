@@ -1,0 +1,145 @@
+name: PR E2E
+
+# Deploys the PR's image to the self-hosted runner and runs a full end-to-end
+# test against it in API mode. The environment is left running until the PR is
+# closed (or torn down early via a "/teardown" comment) so it can be inspected
+# through a Cloudflare Tunnel.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  issue_comment:
+    types: [created]
+
+# Only ever run one PR environment at a time (fixed port 3001).
+concurrency:
+  group: pr-e2e
+  cancel-in-progress: false
+
+env:
+  COMPOSE_FILE: docker-compose.e2e.yml
+  CPM_PORT: "3001"
+
+jobs:
+  deploy-e2e:
+    name: Deploy & E2E
+    runs-on: self-hosted
+    # Own PRs only (not forks), and not on the closed event.
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      CPM_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL || 'admin@example.com' }}
+      CPM_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD || 'changeme' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail fast if a *different* PR's stack already holds the fixed port.
+      - name: Ensure port 3001 is free for this PR
+        run: |
+          set -euo pipefail
+          project="cpm-pr-${PR_NUMBER}"
+          # Any container publishing :3001 that is NOT this PR's stack blocks us.
+          holder=$(docker ps --filter "publish=${CPM_PORT}" --format '{{.Names}}' | grep -v "^cpm-pr-${PR_NUMBER}" || true)
+          if [ -n "$holder" ]; then
+            echo "::error::Port ${CPM_PORT} is in use by another PR environment: $holder"
+            echo "Tear it down first (close that PR or comment /teardown there)."
+            exit 1
+          fi
+          echo "Port ${CPM_PORT} is available for ${project}."
+
+      - name: Build PR image
+        run: |
+          set -euo pipefail
+          IMAGE="cpm-pr-${PR_NUMBER}:${GITHUB_SHA::8}"
+          docker build \
+            --build-arg VERSION="pr-${PR_NUMBER}" \
+            --build-arg COMMIT="${GITHUB_SHA::8}" \
+            -t "$IMAGE" .
+          echo "CPM_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Bring up the environment
+        run: |
+          set -euo pipefail
+          # Recreate cleanly (handles the synchronize re-run case).
+          docker compose -p "cpm-pr-${PR_NUMBER}" -f "$COMPOSE_FILE" up -d --force-recreate
+
+      - name: Run E2E tests
+        env:
+          CPM_URL: http://localhost:3001
+          CADDY_URL: http://localhost:8080
+          ADMIN_EMAIL: ${{ env.CPM_ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ env.CPM_ADMIN_PASSWORD }}
+          TEST_DOMAIN: app.e2e.local
+        run: bash test/e2e/run.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -p "cpm-pr-${PR_NUMBER}" -f "$COMPOSE_FILE" logs --no-color || true
+
+      - name: Comment environment URL
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const n = context.payload.pull_request.number;
+            const marker = "<!-- cpm-e2e-env -->";
+            const body = `${marker}\n✅ **PR E2E environment is up** (port \`3001\`).\n\n` +
+              `Point your Cloudflare Tunnel at \`localhost:3001\` to inspect it.\n\n` +
+              `Comment \`/teardown\` to stop it early; it is otherwise removed when the PR closes.`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: n,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: n, body });
+            }
+
+  teardown-on-close:
+    name: Teardown (PR closed)
+    runs-on: self-hosted
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed'
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tear down the environment
+        run: |
+          set -euo pipefail
+          docker compose -p "cpm-pr-${PR_NUMBER}" -f "$COMPOSE_FILE" down -v --remove-orphans || true
+          docker image rm "cpm-pr-${PR_NUMBER}:${GITHUB_SHA::8}" 2>/dev/null || true
+          echo "Environment for PR #${PR_NUMBER} torn down."
+
+  teardown-on-comment:
+    name: Teardown (/teardown comment)
+    runs-on: self-hosted
+    # Only on PR comments containing "/teardown", authored by the repo owner.
+    if: >
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/teardown') &&
+      github.event.comment.user.login == github.repository_owner
+    env:
+      PR_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tear down the environment
+        run: |
+          set -euo pipefail
+          docker compose -p "cpm-pr-${PR_NUMBER}" -f "$COMPOSE_FILE" down -v --remove-orphans || true
+          echo "Environment for PR #${PR_NUMBER} torn down."
+      - name: Acknowledge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: ${{ env.PR_NUMBER }},
+              body: "🧹 PR E2E environment torn down.",
+            });

@@ -1,0 +1,42 @@
+# Per-PR end-to-end environment. CPM runs in API mode and manages Caddy via its
+# admin API; whoami is a test upstream that CPM reverse-proxies to.
+#
+# The compose project name (set via -p cpm-pr-<N> in CI) isolates the network,
+# volume and container names per PR. CPM is published on a fixed host port so a
+# Cloudflare Tunnel can target it.
+services:
+  cpm:
+    image: ${CPM_IMAGE:?set CPM_IMAGE to the PR image tag}
+    container_name: cpm-pr-${PR_NUMBER:?set PR_NUMBER}
+    restart: unless-stopped
+    environment:
+      CPM_CADDY_MODE: api
+      CPM_CADDY_ADMINURL: http://localhost:2019
+      # Caddy needs to listen on :80 inside the container for proxied requests.
+      CPM_CADDY_LISTEN: ":80"
+      CPM_ADMIN_EMAIL: ${CPM_ADMIN_EMAIL:-admin@example.com}
+      CPM_ADMIN_PASSWORD: ${CPM_ADMIN_PASSWORD:-changeme}
+      CPM_LOG_LEVEL: info
+    ports:
+      # Fixed published port for the tunnel + E2E (CPM API/UI).
+      - "3001:3001"
+      # Caddy's HTTP port, exposed so the E2E can verify proxied requests.
+      - "8080:80"
+    networks:
+      - cpm
+    labels:
+      cpm.pr: "${PR_NUMBER}"
+
+  whoami:
+    image: traefik/whoami:latest
+    container_name: cpm-pr-${PR_NUMBER}-whoami
+    restart: unless-stopped
+    command: ["--port", "80"]
+    networks:
+      - cpm
+    labels:
+      cpm.pr: "${PR_NUMBER}"
+
+networks:
+  cpm:
+    name: cpm-pr-${PR_NUMBER}
