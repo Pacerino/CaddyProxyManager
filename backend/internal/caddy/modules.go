@@ -1,6 +1,7 @@
 package caddy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -39,20 +40,109 @@ type rawModule struct {
 	PackageURL string `json:"package_url"`
 }
 
-// ListModules runs `caddy list-modules --json` against the configured binary
-// and returns the parsed module list sorted by ID. It is the canonical way to
-// discover which plugins a user-supplied Caddy build provides.
+// ListModules returns the module list reported by the configured Caddy binary,
+// sorted by ID. It is the canonical way to discover which plugins a
+// user-supplied Caddy build provides.
+//
+// It prefers `caddy list-modules --json`, but older Caddy versions don't
+// support the --json flag; in that case it falls back to parsing the plain
+// text output.
 func ListModules() ([]Module, error) {
+	out, jsonErr := runListModules("--json")
+	if jsonErr == nil {
+		return parseModules(out)
+	}
+	// Older Caddy without --json support: fall back to text parsing.
+	return listModulesText()
+}
+
+// runListModules runs `caddy list-modules <args...>` and returns stdout,
+// surfacing stderr in the error message.
+func runListModules(args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, config.Configuration.Caddy.Binary, "list-modules", "--json")
+	cmd := exec.CommandContext(ctx, config.Configuration.Caddy.Binary, append([]string{"list-modules"}, args...)...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("running %q list-modules: %w", config.Configuration.Caddy.Binary, err)
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, fmt.Errorf("running %q list-modules: %s", config.Configuration.Caddy.Binary, msg)
+	}
+	return out, nil
+}
+
+// listModulesText builds the module list from Caddy's plain-text output, used
+// when the binary doesn't support --json. It runs once for the full list
+// (with package paths) and once skipping standard modules to classify which
+// modules are non-standard plugins.
+func listModulesText() ([]Module, error) {
+	full, err := runListModules("--packages")
+	if err != nil {
+		return nil, err
+	}
+	// --skip-standard yields only the non-standard (plugin) module IDs.
+	skipStd, err := runListModules("--skip-standard", "--packages")
+	if err != nil {
+		// Without classification, treat everything as standard rather than fail.
+		skipStd = nil
 	}
 
-	return parseModules(out)
+	nonStandard := map[string]bool{}
+	for _, line := range parseTextModuleLines(skipStd) {
+		nonStandard[line.id] = true
+	}
+
+	lines := parseTextModuleLines(full)
+	modules := make([]Module, 0, len(lines))
+	for _, l := range lines {
+		namespace, name := splitModuleID(l.id)
+		modules = append(modules, Module{
+			ID:        l.id,
+			Namespace: namespace,
+			Name:      name,
+			Standard:  !nonStandard[l.id],
+			Package:   l.pkg,
+		})
+	}
+
+	sort.Slice(modules, func(i, j int) bool { return modules[i].ID < modules[j].ID })
+	return modules, nil
+}
+
+type textModuleLine struct {
+	id  string
+	pkg string
+}
+
+// parseTextModuleLines parses lines of `caddy list-modules --packages` output.
+// Each module line looks like "http.handlers.reverse_proxy github.com/...".
+// Summary/blank lines (e.g. "Standard modules: 132") are skipped.
+func parseTextModuleLines(data []byte) []textModuleLine {
+	var out []textModuleLine
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		id := fields[0]
+		// A module ID is a dotted token; summary lines like "Standard
+		// modules: 132" start with a word and a colon, so skip non-module ids.
+		if !strings.Contains(id, ".") || strings.HasSuffix(id, ":") {
+			continue
+		}
+		pkg := ""
+		if len(fields) > 1 {
+			pkg = fields[len(fields)-1]
+		}
+		out = append(out, textModuleLine{id: id, pkg: pkg})
+	}
+	return out
 }
 
 // parseModules decodes the JSON output of `caddy list-modules --json`.
