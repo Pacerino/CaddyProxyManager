@@ -22,6 +22,7 @@ services:
       - "3001:3001"
       # Caddy's HTTP port, exposed so the E2E can verify proxied requests.
       - "8080:80"
+      - "8443:443"
     networks:
       - cpm
     labels:
