@@ -45,7 +45,7 @@ jobs:
         run: go test -count=1 ./...
 
   test-frontend:
-    name: Build frontend
+    name: Test & build frontend
     runs-on: self-hosted
     defaults:
       run:
@@ -59,6 +59,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci || npm install
+      - name: Test
+        run: npm run test
       - name: Type-check and build
         run: |
           mkdir -p ../backend/embed/assets
@@ -123,11 +125,16 @@ jobs:
   release:
     name: Build binaries & release
     runs-on: self-hosted
+    timeout-minutes: 30
     needs: [test-backend, test-frontend]
     # Only build downloadable binaries and a release on version tags.
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       CGO_ENABLED: "0"
+      # Limit compiler parallelism to keep peak memory down on the self-hosted
+      # runner (exit 143 / SIGTERM was an OOM kill during cross-compilation).
+      GOFLAGS: "-p=2"
+      GOMAXPROCS: "2"
     steps:
       - uses: actions/checkout@v4
 

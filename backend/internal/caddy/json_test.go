@@ -65,3 +65,37 @@ func TestBuildRoute(t *testing.T) {
 		t.Errorf("upstreams = %v", ups)
 	}
 }
+
+func TestBuildRouteInjectsHostPlugins(t *testing.T) {
+	h := database.Host{
+		Domains:   "example.com",
+		Upstreams: []database.Upstream{{Backend: "127.0.0.1:8080"}},
+		Plugins: []database.HostPlugin{
+			{
+				ModuleID: "http.handlers.authentication",
+				Enabled:  true,
+				Handler:  database.JSON(`{"handler":"authentication"}`),
+			},
+			{
+				ModuleID: "http.handlers.authentication",
+				Enabled:  false, // disabled -> skipped
+				Handler:  database.JSON(`{"handler":"ignored"}`),
+			},
+		},
+	}
+	h.ID = 1
+
+	route := buildRoute(h)
+	handle := route["handle"].([]map[string]any)
+
+	// Plugin handler must come first, reverse_proxy last.
+	if len(handle) != 2 {
+		t.Fatalf("expected 2 handlers, got %d: %v", len(handle), handle)
+	}
+	if handle[0]["handler"] != "authentication" {
+		t.Errorf("first handler = %v, want authentication", handle[0]["handler"])
+	}
+	if handle[len(handle)-1]["handler"] != "reverse_proxy" {
+		t.Errorf("last handler = %v, want reverse_proxy", handle[len(handle)-1]["handler"])
+	}
+}
