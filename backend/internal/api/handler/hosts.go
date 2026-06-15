@@ -17,7 +17,7 @@ import (
 func (s Handler) GetHosts() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var hosts []database.Host
-		if err := s.DB.Preload("Upstreams").Find(&hosts).Error; err != nil {
+		if err := s.DB.Preload("Upstreams").Preload("Plugins").Find(&hosts).Error; err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 		}
 		h.ResultResponseJSON(w, r, http.StatusOK, hosts)
@@ -36,7 +36,7 @@ func (s Handler) GetHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
-		if err = s.DB.Where("id = ?", hostID).Preload("Upstreams").First(&host).Error; err != nil {
+		if err = s.DB.Where("id = ?", hostID).Preload("Upstreams").Preload("Plugins").First(&host).Error; err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 		} else {
 			h.ResultResponseJSON(w, r, http.StatusOK, host)
@@ -71,11 +71,10 @@ func (s Handler) CreateHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		created := newHost
 		if err := jobqueue.AddJob(jobqueue.Job{
-			Name: "CaddyConfigureHost",
-			Action: func() error {
-				return provider.WriteHost(newHost)
-			},
+			Name:   "CaddyConfigureHost",
+			Action: func() error { return provider.WriteHost(created) },
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
@@ -106,23 +105,40 @@ func (s Handler) UpdateHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
-		if err := jobqueue.AddJob(jobqueue.Job{
-			Name: "CaddyConfigureHost",
-			Action: func() error {
-				return provider.WriteHost(newHost)
-			},
+		// Persist the host fields and replace its upstreams. Replace deletes
+		// upstreams that are no longer present and inserts the new set, so
+		// repeated edits don't accumulate duplicates.
+		if err := s.DB.Transaction(func(tx *gorm.DB) error {
+			upstreams := newHost.Upstreams
+			newHost.Upstreams = nil
+			if err := tx.Model(&database.Host{}).
+				Where("id = ?", newHost.ID).
+				Updates(map[string]any{"domains": newHost.Domains, "matcher": newHost.Matcher}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&newHost).Association("Upstreams").Replace(upstreams)
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
 
-		result := s.DB.Session(&gorm.Session{FullSaveAssociations: true}).Save(&newHost)
-		if result.Error != nil {
-			h.ResultErrorJSON(w, r, http.StatusBadRequest, result.Error.Error(), nil)
+		// Re-read the persisted host (with associations) and apply that
+		// snapshot to Caddy. Reading a fresh copy avoids sharing the request's
+		// mutable struct with the async job goroutine.
+		var persisted database.Host
+		if err := s.DB.Where("id = ?", newHost.ID).Preload("Upstreams").Preload("Plugins").First(&persisted).Error; err != nil {
+			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+		if err := jobqueue.AddJob(jobqueue.Job{
+			Name:   "CaddyConfigureHost",
+			Action: func() error { return provider.WriteHost(persisted) },
+		}); err != nil {
+			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
 
-		h.ResultResponseJSON(w, r, http.StatusOK, newHost)
+		h.ResultResponseJSON(w, r, http.StatusOK, persisted)
 	}
 }
 

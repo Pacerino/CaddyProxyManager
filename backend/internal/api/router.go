@@ -45,6 +45,24 @@ func generateRoutes(r chi.Router, h *handler.Handler) chi.Router {
 			r.Get("/{hostID:[0-9]+}", h.GetHost())       // Get specific Host by ID
 			r.Delete("/{hostID:[0-9]+}", h.DeleteHost()) // Delete Host by ID
 			r.Put("/", h.UpdateHost())                   // Update Host by ID
+
+			// Per-host plugin configuration.
+			r.Put("/{hostID:[0-9]+}/plugins", h.SetHostPlugin())                         // Create/update a host plugin
+			r.Delete("/{hostID:[0-9]+}/plugins/{pluginID:[0-9]+}", h.DeleteHostPlugin()) // Remove a host plugin
+		})
+
+		//Caddy (modules, schemas & live config)
+		r.With(middleware.Enforce()).Route("/caddy", func(r chi.Router) {
+			r.Get("/modules", h.GetCaddyModules())           // List modules/plugins of the caddy build
+			r.Get("/schemas", h.GetCaddySchemas())           // Global-scope config schemas
+			r.Get("/host-schemas", h.GetHostScopedSchemas()) // Host-scope config schemas
+			r.Get("/config", h.GetCaddyConfig())             // Read live caddy config (api mode)
+
+			r.Route("/module-configs", func(r chi.Router) {
+				r.Get("/", h.GetModuleConfigs())                 // List stored module configs
+				r.Put("/", h.SetModuleConfig())                  // Create/update + apply a module config
+				r.Delete("/{id:[0-9]+}", h.DeleteModuleConfig()) // Delete a module config
+			})
 		})
 
 		//Auth

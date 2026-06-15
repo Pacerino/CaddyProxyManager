@@ -17,7 +17,7 @@ var dbInstance *gorm.DB
 func NewDB() {
 	logger.Info("Creating new DB instance")
 	dbInstance = SqliteDB()
-	dbInstance.AutoMigrate(&Host{}, &Upstream{}, &User{})
+	dbInstance.AutoMigrate(&Host{}, &Upstream{}, &HostPlugin{}, &User{}, &ModuleConfig{})
 	seedAdmin()
 }
 
