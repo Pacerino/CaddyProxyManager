@@ -16,8 +16,13 @@ if [ ! -f "$CADDY_CONFIG" ]; then
 JSON
 fi
 
-echo "Starting Caddy with admin API…"
-caddy run --config "$CADDY_CONFIG" &
+# Allow pointing at a custom Caddy build (e.g. one compiled with extra plugins)
+# mounted into the container. Keep this in sync with CPM_CADDY_BINARY so CPM's
+# module detection inspects the same binary.
+CADDY_BINARY="${CPM_CADDY_BINARY:-caddy}"
+
+echo "Starting ${CADDY_BINARY} with admin API…"
+"$CADDY_BINARY" run --config "$CADDY_CONFIG" &
 CADDY_PID=$!
 
 # Stop Caddy when CPM exits.
