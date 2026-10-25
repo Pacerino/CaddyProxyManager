@@ -91,6 +91,7 @@ All settings are environment variables prefixed with `CPM_`.
 | `CPM_CADDY_BINARY` | `caddy` | Caddy executable for the `exec` reload strategy. |
 | `CPM_CADDY_SERVICE` | `caddy.service` | systemd unit for the `systemd` reload strategy. |
 | `CPM_CADDYFILE` | `/etc/caddy/Caddyfile` | Main Caddyfile (used by `exec`/`api` reload). |
+| `CPM_CADDY_SCHEMAFILE` | `/usr/share/cpm/caddy_schema.json` | Caddy JSON schema used to describe DNS provider fields (API mode). |
 
 ### Authentication
 
@@ -187,6 +188,24 @@ Yes. Set `CPM_AUTH_MODE=oidc` and configure the `CPM_AUTH_OIDC_*` variables. On 
 
 The Docker image does — its entrypoint launches Caddy with the admin API and then CPM. For bare-metal installs, run Caddy yourself and point CPM at it (`CPM_CADDYFILE` / `CPM_CADDY_ADMINURL`) with the appropriate reload strategy.
 </details>
+
+## 🔐 DNS providers
+
+CPM can obtain certificates through ACME DNS-01 challenges, e.g. for wildcard domains or hosts that are not reachable from the internet.
+
+1. Open the **Plugins** page and save credentials for a DNS provider (Cloudflare, DuckDNS, Porkbun, or any other DNS module built into your Caddy).
+2. Pick one of the saved providers when creating or editing a host.
+
+Use Caddy `{env.VAR}` placeholders for secrets (e.g. `api_token = {env.DUCKDNS_TOKEN}`) and pass the variable to the container (`-e DUCKDNS_TOKEN=...`). The placeholder is stored in the database, not the secret itself, and API responses never contain secret values.
+
+The `-dns` image flavor bundles the `cloudflare`, `duckdns` and `porkbun` providers. For other providers, build your own image with `CADDY_PLUGINS` (see [Building the image yourself](#-building-the-image-yourself)).
+
+> [!NOTE]
+> Hosts using a DNS provider get a dedicated TLS policy that uses Let's Encrypt only; there is no ZeroSSL fallback for DNS-challenge hosts.
+
+## ⚠️ Limitations
+
+- Plugins and DNS providers require `CPM_CADDY_MODE=api`. In Caddyfile mode the endpoints return an error and provider choices on hosts are ignored.
 
 ## 🗺️ Roadmap
 
