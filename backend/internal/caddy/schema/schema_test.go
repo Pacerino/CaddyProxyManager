@@ -140,3 +140,28 @@ func TestBuildReturnsValidationError(t *testing.T) {
 		t.Fatal("expected api_token in validation error fields")
 	}
 }
+
+func TestValidate_StringListAndJSON(t *testing.T) {
+	s := &Schema{Fields: []Field{
+		{Key: "list", Type: FieldStringList},
+		{Key: "raw", Type: FieldJSON},
+	}}
+	ok := func(v map[string]any) {
+		t.Helper()
+		if errs := s.Validate(v); len(errs) != 0 {
+			t.Errorf("%v: unexpected errors %v", v, errs)
+		}
+	}
+	bad := func(v map[string]any, key string) {
+		t.Helper()
+		if errs := s.Validate(v); errs[key] == "" {
+			t.Errorf("%v: expected error for %q, got %v", v, key, errs)
+		}
+	}
+	ok(map[string]any{"list": []any{"a", "b"}})
+	bad(map[string]any{"list": "a"}, "list")
+	bad(map[string]any{"list": []any{"a", 1.0}}, "list")
+	ok(map[string]any{"raw": map[string]any{"a": 1.0}})
+	ok(map[string]any{"raw": 5.0})
+	ok(map[string]any{"raw": "text"})
+}

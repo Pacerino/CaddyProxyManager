@@ -324,25 +324,30 @@ func (r *Resolver) resolve(ctx context.Context, id string, fromFile map[string]P
 	return newProvider(id, SourceNone)
 }
 
-// fromDocs fetches a provider from the docs API, caching hits and misses.
+// fromDocs fetches a provider from the docs API. Hits and definitive misses
+// are cached; transient failures (transport errors, cancelled contexts) are not.
 func (r *Resolver) fromDocs(ctx context.Context, id string) *Provider {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if p, ok := r.docsCache[id]; ok {
 		return p
 	}
-	p := r.fetchDocs(ctx, id)
-	if r.docsCache == nil {
-		r.docsCache = map[string]*Provider{}
+	p, definitive := r.fetchDocs(ctx, id)
+	if definitive && ctx.Err() == nil {
+		if r.docsCache == nil {
+			r.docsCache = map[string]*Provider{}
+		}
+		r.docsCache[id] = p
 	}
-	r.docsCache[id] = p
 	return p
 }
 
-func (r *Resolver) fetchDocs(ctx context.Context, id string) *Provider {
+// fetchDocs returns the provider (nil on a miss) and whether the outcome is
+// definitive, i.e. safe to cache.
+func (r *Resolver) fetchDocs(ctx context.Context, id string) (*Provider, bool) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.DocsBaseURL+strings.TrimPrefix(id, providerPrefix), nil)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	client := r.Client
 	if client == nil {
@@ -350,19 +355,19 @@ func (r *Resolver) fetchDocs(ctx context.Context, id string) *Provider {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil
+		return nil, true
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	p, err := ParseDocsAPI(id, body)
 	if err != nil {
-		return nil
+		return nil, true
 	}
-	return &p
+	return &p, true
 }

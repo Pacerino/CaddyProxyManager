@@ -2,6 +2,7 @@ package dnsschema
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -236,5 +237,64 @@ func TestResolver_RegisteredSchemaOverrides(t *testing.T) {
 		if p.ModuleID == "dns.providers.cloudflare" && p.Source != SourceOverride {
 			t.Errorf("cloudflare source %q, want override", p.Source)
 		}
+	}
+}
+
+func duckResolver(docsURL string, client *http.Client) *Resolver {
+	return &Resolver{
+		DocsBaseURL: docsURL,
+		Client:      client,
+		override:    noOverride,
+		ListModules: func() ([]caddy.Module, error) {
+			return []caddy.Module{{ID: "dns.providers.duckdns", Namespace: "dns.providers", Name: "duckdns"}}, nil
+		},
+	}
+}
+
+type failingTransport struct{ fail atomic.Bool }
+
+func (f *failingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if f.fail.Load() {
+		return nil, errors.New("network down")
+	}
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+func TestResolver_TransportFailureNotCached(t *testing.T) {
+	docs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(readFixture(t, "docsapi_duckdns.json"))
+	}))
+	defer docs.Close()
+	tr := &failingTransport{}
+	tr.fail.Store(true)
+	r := duckResolver(docs.URL+"/", &http.Client{Transport: tr})
+
+	first, err := r.Providers(context.Background())
+	if err != nil || first[0].Source != SourceNone {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	tr.fail.Store(false)
+	second, err := r.Providers(context.Background())
+	if err != nil || second[0].Source != SourceDocs {
+		t.Fatalf("second: %+v %v", second, err)
+	}
+}
+
+func TestResolver_CancelledContextNotCached(t *testing.T) {
+	docs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(readFixture(t, "docsapi_duckdns.json"))
+	}))
+	defer docs.Close()
+	r := duckResolver(docs.URL+"/", docs.Client())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	first, err := r.Providers(ctx)
+	if err != nil || first[0].Source != SourceNone {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	second, err := r.Providers(context.Background())
+	if err != nil || second[0].Source != SourceDocs {
+		t.Fatalf("second: %+v %v", second, err)
 	}
 }
