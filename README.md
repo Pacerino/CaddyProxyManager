@@ -211,6 +211,7 @@ The `-dns` image flavor bundles these providers: [`cloudflare`](https://github.c
 On the **Plugins** page you can add or remove Caddy plugins without rebuilding the image. CPM asks the [Caddy download service](https://caddyserver.com/download) for a build containing the plugin, swaps Caddy over to it and rolls back automatically if Caddy does not come up healthy.
 
 - **Any registered plugin works.** Search the catalog or enter a Go module path (e.g. `github.com/mholt/caddy-ratelimit`). Plugins from the tested list (the ones bundled in the `-dns` image) are marked as tested; everything else is marked untested, so use it at your own risk.
+- **Caddy version.** Caddy's build service always builds the latest Caddy release, so installing or removing a plugin also updates Caddy if the image ships an older one (CPM never downgrades).
 - **Restart note.** Switching binaries restarts Caddy, so there is a short interruption while the new build starts. Existing plugins stay pinned to their installed version; the new one is added at its latest version.
 - **Rollback.** CPM keeps the previous binary. If the new build fails to start, or applying your hosts to it reports errors, CPM switches back automatically and shows the error.
 - **Updates.** When a newer version of an installed plugin is available, the Plugins page shows an update banner and offers to update (it applies the same safe switch with rollback). A failed update is reported on the page.
