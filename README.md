@@ -205,7 +205,7 @@ The `-dns` image flavor bundles the `cloudflare`, `duckdns` and `porkbun` provid
 
 ## ⚠️ Limitations
 
-- Plugins and DNS providers require `CPM_CADDY_MODE=api`. In Caddyfile mode the endpoints return an error and provider choices on hosts are ignored.
+- Plugins and DNS providers require `CPM_CADDY_MODE=api`. In Caddyfile mode the plugin and DNS provider endpoints return `400`, and creating or updating a host with a DNS provider is rejected with `400` ("DNS providers are only available when CPM_CADDY_MODE=api"). Provider choices saved earlier in API mode are kept but ignored, and the Hosts page flags them.
 
 ## 🗺️ Roadmap
 
