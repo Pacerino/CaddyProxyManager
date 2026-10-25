@@ -148,6 +148,18 @@ describe("InstalledPluginsSection", () => {
     expect(screen.getByText(/Foo=bar/).tagName).toBe("PRE");
   });
 
+  it("renders no empty drop-in block when setup-needed arrives without a drop-in", async () => {
+    mockGet({
+      ...baseState,
+      installEnabled: false,
+      setup: { state: "setup-needed", reason: "Run this once", dropIn: "" },
+    });
+    const { container } = render(<InstalledPluginsSection />);
+    expect(await screen.findByText("Run this once")).toBeTruthy();
+    expect(container.querySelector("pre")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
+  });
+
   it("hides the buttons and shows the reason when install is disabled", async () => {
     mockGet({ ...baseState, installEnabled: false, disabledReason: "Disabled by CPM_PLUGIN_INSTALL" });
     render(<InstalledPluginsSection />);
