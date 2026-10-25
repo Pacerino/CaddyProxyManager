@@ -56,7 +56,7 @@ Images are published for `linux/amd64` and `linux/arm64` in two flavors:
 | Tag | Contents |
 | --- | --- |
 | `latest`, `<version>`, `<major>.<minor>` | Newest stable release with the stock Caddy build. |
-| `latest-dns`, `<version>-dns`, … | Same, with Caddy built with the [`cloudflare`](https://github.com/caddy-dns/cloudflare), [`duckdns`](https://github.com/caddy-dns/duckdns) and [`porkbun`](https://github.com/caddy-dns/porkbun) DNS providers for ACME DNS-01 challenges. |
+| `latest-dns`, `<version>-dns`, … | Same, with Caddy built with 26 DNS providers for ACME DNS-01 challenges (see [DNS providers](#-dns-providers)). |
 
 > [!NOTE]
 > Images are only published for version tags. Pre-releases (e.g. `v3.2.0-rc1`) get their exact version tag but never move `latest`.
@@ -198,7 +198,7 @@ CPM can obtain certificates through ACME DNS-01 challenges, e.g. for wildcard do
 
 Use Caddy `{env.VAR}` placeholders for secrets (e.g. `api_token = {env.DUCKDNS_TOKEN}`) and pass the variable to the container (`-e DUCKDNS_TOKEN=...`). The placeholder is stored in the database, not the secret itself, and API responses never contain secret values.
 
-The `-dns` image flavor bundles the `cloudflare`, `duckdns` and `porkbun` providers. For other providers, build your own image with `CADDY_PLUGINS` (see [Building the image yourself](#-building-the-image-yourself)).
+The `-dns` image flavor bundles these providers: [`cloudflare`](https://github.com/caddy-dns/cloudflare), [`duckdns`](https://github.com/caddy-dns/duckdns), [`porkbun`](https://github.com/caddy-dns/porkbun), [`route53`](https://github.com/caddy-dns/route53), [`digitalocean`](https://github.com/caddy-dns/digitalocean), [`hetzner`](https://github.com/caddy-dns/hetzner), [`ovh`](https://github.com/caddy-dns/ovh), [`namecheap`](https://github.com/caddy-dns/namecheap), [`gandi`](https://github.com/caddy-dns/gandi), [`desec`](https://github.com/caddy-dns/desec), [`netcup`](https://github.com/caddy-dns/netcup), [`ionos`](https://github.com/caddy-dns/ionos), [`linode`](https://github.com/caddy-dns/linode), [`godaddy`](https://github.com/caddy-dns/godaddy), [`rfc2136`](https://github.com/caddy-dns/rfc2136), [`acmedns`](https://github.com/caddy-dns/acmedns), [`bunny`](https://github.com/caddy-dns/bunny), [`inwx`](https://github.com/caddy-dns/inwx), [`dynv6`](https://github.com/caddy-dns/dynv6), [`azure`](https://github.com/caddy-dns/azure), [`googleclouddns`](https://github.com/caddy-dns/googleclouddns), [`namesilo`](https://github.com/caddy-dns/namesilo), [`powerdns`](https://github.com/caddy-dns/powerdns), [`transip`](https://github.com/caddy-dns/transip), [`alidns`](https://github.com/caddy-dns/alidns), [`he`](https://github.com/caddy-dns/he). For other providers, build your own image with `CADDY_PLUGINS` (see [Building the image yourself](#-building-the-image-yourself)).
 
 > [!NOTE]
 > Hosts using a DNS provider get a dedicated TLS policy that uses Let's Encrypt only; there is no ZeroSSL fallback for DNS-challenge hosts.
