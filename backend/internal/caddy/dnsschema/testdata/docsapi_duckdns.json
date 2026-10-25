@@ -1,0 +1,25 @@
+{
+  "status_code": 200,
+  "result": {
+    "structure": {
+      "type": "struct",
+      "type_name": "github.com/caddy-dns/duckdns.Provider",
+      "struct_fields": [
+        {
+          "key": "api_token",
+          "value": {
+            "type": "string"
+          }
+        },
+        {
+          "key": "override_domain",
+          "value": {
+            "type": "string"
+          }
+        }
+      ],
+      "doc": "Provider wraps the provider implementation as a Caddy module.\n",
+      "module_inline_key": "name"
+    }
+  }
+}
