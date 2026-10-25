@@ -103,7 +103,6 @@ jobs:
               github.com/caddy-dns/acmedns
               github.com/caddy-dns/bunny
               github.com/caddy-dns/inwx
-              github.com/caddy-dns/dynv6
               github.com/caddy-dns/azure
               github.com/caddy-dns/googleclouddns
               github.com/caddy-dns/namesilo
