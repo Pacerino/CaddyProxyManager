@@ -100,6 +100,17 @@ func (f *fakeCaddy) handleTLS(w http.ResponseWriter, r *http.Request) bool {
 	}
 	switch {
 	case r.Method == http.MethodGet:
+		// Like Caddy: a missing last segment is 200 "null", a missing
+		// intermediate segment is a 400.
+		if (path == auto && !f.tlsExists) || (path == pol && !f.automationExists) {
+			missing := tls
+			if f.tlsExists {
+				missing = auto
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"invalid traversal path at: ` + strings.TrimPrefix(missing, "/") + `"}`))
+			return true
+		}
 		out := "null"
 		switch {
 		case path == tls && f.tlsExists:

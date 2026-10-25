@@ -121,9 +121,23 @@ func providerObject(prov database.DNSProvider) (map[string]any, error) {
 // own. CPM-owned policies (per-host @id and the legacy Cloudflare policy of
 // earlier versions) are replaced; all others are preserved in order.
 func (p *APIProvider) SyncTLSPolicies(policies []map[string]any) error {
+	// Probe top-down: Caddy answers 200 "null" only when the last path segment
+	// is missing; a missing intermediate segment is a 400.
+	tlsExists, err := p.configExists("/config/apps/tls")
+	if err != nil {
+		return err
+	}
+	autoExists := false
+	if tlsExists {
+		if autoExists, err = p.configExists("/config/apps/tls/automation"); err != nil {
+			return err
+		}
+	}
 	var existing []map[string]any
-	if err := p.GetConfig(tlsPoliciesPath, &existing); err != nil {
-		return fmt.Errorf("read tls policies: %w", err)
+	if autoExists {
+		if err := p.GetConfig(tlsPoliciesPath, &existing); err != nil {
+			return fmt.Errorf("read tls policies: %w", err)
+		}
 	}
 
 	merged := make([]map[string]any, 0, len(policies)+len(existing))
@@ -140,22 +154,14 @@ func (p *APIProvider) SyncTLSPolicies(policies []map[string]any) error {
 		return nil
 	}
 
-	// A present policies array (even empty) means the parents exist.
+	// A present policies array (even empty) means PATCH can replace it.
 	if existing != nil {
 		return p.do(http.MethodPatch, tlsPoliciesPath, merged, nil)
-	}
-	tlsExists, err := p.configExists("/config/apps/tls")
-	if err != nil {
-		return err
 	}
 	if !tlsExists {
 		return p.do(http.MethodPut, "/config/apps/tls", map[string]any{
 			"automation": map[string]any{"policies": merged},
 		}, nil)
-	}
-	autoExists, err := p.configExists("/config/apps/tls/automation")
-	if err != nil {
-		return err
 	}
 	if !autoExists {
 		return p.do(http.MethodPut, "/config/apps/tls/automation", map[string]any{"policies": merged}, nil)

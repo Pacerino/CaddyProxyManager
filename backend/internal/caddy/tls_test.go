@@ -194,3 +194,15 @@ func TestPing(t *testing.T) {
 		t.Error("expected error for 500")
 	}
 }
+
+func TestSyncTLSPolicies_CreatesMissingPoliciesKey(t *testing.T) {
+	fake := newFakeCaddy()
+	fake.tlsExists, fake.automationExists = true, true
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	if err := newTestProvider(srv.URL).SyncTLSPolicies([]map[string]any{{"@id": "cpm_tls_host_1"}}); err != nil {
+		t.Fatalf("SyncTLSPolicies: %v", err)
+	}
+	assertCalled(t, fake, "PUT /config/apps/tls/automation/policies")
+}
