@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Pacerino/CaddyProxyManager/internal/caddy/pluginmgr"
 	"github.com/Pacerino/CaddyProxyManager/internal/config"
@@ -35,6 +37,7 @@ type stubPlugins struct {
 	busy         bool
 	running      *pluginmgr.Operation
 	ops          map[string]*pluginmgr.Operation
+	lastFinished map[pluginmgr.OpKind]*pluginmgr.Operation
 	started      []string // "kind pkg"
 	managed      string
 	shipped      string
@@ -66,6 +69,11 @@ func (s *stubPlugins) Get(id string) (*pluginmgr.Operation, bool) {
 
 func (s *stubPlugins) Running() (*pluginmgr.Operation, bool) {
 	return s.running, s.running != nil
+}
+
+func (s *stubPlugins) LastFinished(kind pluginmgr.OpKind) (*pluginmgr.Operation, bool) {
+	op, ok := s.lastFinished[kind]
+	return op, ok
 }
 
 func (s *stubPlugins) UpdateAvailable(context.Context) (string, string, bool, error) {
@@ -124,6 +132,7 @@ type pluginsView struct {
 	Update         map[string]any        `json:"update"`
 	AutoUpdate     bool                  `json:"autoUpdate"`
 	Operation      *pluginmgr.Operation  `json:"operation"`
+	LastUpdate     *pluginmgr.Operation  `json:"lastUpdate"`
 }
 
 func getPlugins(t *testing.T, h Handler) pluginsView {
@@ -516,5 +525,32 @@ func TestSwappableResolver(t *testing.T) {
 	sw.Set(stubResolver{err: errors.New("new")})
 	if _, err := sw.Providers(context.Background()); err == nil || err.Error() != "new" {
 		t.Fatalf("err after Set = %v", err)
+	}
+}
+
+func TestGetPlugins_LastUpdate(t *testing.T) {
+	stub := newStubPlugins()
+	h := newPluginTestHandler(t, stub)
+	if v := getPlugins(t, h); v.LastUpdate != nil {
+		t.Errorf("lastUpdate = %+v, want none", v.LastUpdate)
+	}
+	rec := doRequest(h.GetPlugins(), http.MethodGet, "/caddy/plugins", nil, nil)
+	if strings.Contains(rec.Body.String(), "lastUpdate") {
+		t.Errorf("lastUpdate should be omitted: %s", rec.Body.String())
+	}
+
+	finished := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	stub.lastFinished = map[pluginmgr.OpKind]*pluginmgr.Operation{
+		pluginmgr.OpUpdate: {ID: "u1", Kind: pluginmgr.OpUpdate, Step: pluginmgr.StepRolledBack, Error: "caddy did not answer", FinishedAt: finished},
+	}
+	v := getPlugins(t, h)
+	if v.LastUpdate == nil || v.LastUpdate.Step != pluginmgr.StepRolledBack || v.LastUpdate.Error != "caddy did not answer" || !v.LastUpdate.FinishedAt.Equal(finished) {
+		t.Errorf("failed lastUpdate = %+v", v.LastUpdate)
+	}
+
+	stub.lastFinished[pluginmgr.OpUpdate] = &pluginmgr.Operation{ID: "u2", Kind: pluginmgr.OpUpdate, Step: pluginmgr.StepDone, FinishedAt: finished}
+	v = getPlugins(t, h)
+	if v.LastUpdate == nil || v.LastUpdate.Step != pluginmgr.StepDone || v.LastUpdate.Error != "" {
+		t.Errorf("done lastUpdate = %+v", v.LastUpdate)
 	}
 }

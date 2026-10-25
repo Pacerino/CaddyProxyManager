@@ -1031,3 +1031,40 @@ func TestVerify_EmptyLiveConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestLastFinished(t *testing.T) {
+	e := newEnv(t)
+	if op, ok := e.m.LastFinished(OpUpdate); ok {
+		t.Fatalf("LastFinished before any op = %+v", op)
+	}
+
+	// Without a managed binary the update fails right away.
+	failed := e.run(t, OpUpdate, "")
+	if failed.Step != StepFailed {
+		t.Fatalf("update: %+v", failed)
+	}
+	added := e.run(t, OpAdd, ratelimit)
+	if added.Step != StepDone {
+		t.Fatalf("add: %+v", added)
+	}
+
+	got, ok := e.m.LastFinished(OpUpdate)
+	if !ok || got.ID != failed.ID || got.Step != StepFailed || got.Error == "" || got.FinishedAt.IsZero() {
+		t.Fatalf("LastFinished(update) = %+v, %v", got, ok)
+	}
+	if got, ok := e.m.LastFinished(OpAdd); !ok || got.ID != added.ID || got.Step != StepDone {
+		t.Fatalf("LastFinished(add) = %+v, %v", got, ok)
+	}
+
+	// A running operation is not reported as finished.
+	e.restart.block = make(chan struct{})
+	op, err := e.m.Start(OpRemove, ratelimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := e.m.LastFinished(OpRemove); ok {
+		t.Fatalf("LastFinished(remove) while running = %+v", got)
+	}
+	close(e.restart.block)
+	waitOp(t, e.m, op.ID)
+}

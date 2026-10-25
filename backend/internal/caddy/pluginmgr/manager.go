@@ -221,6 +221,21 @@ func (m *Manager) Running() (*Operation, bool) {
 	return &c, true
 }
 
+// LastFinished returns a copy of the most recently started operation of kind
+// that has finished, with any outcome.
+func (m *Manager) LastFinished(kind OpKind) (*Operation, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := len(m.order) - 1; i >= 0; i-- {
+		op, ok := m.ops[m.order[i]]
+		if ok && op.Kind == kind && !op.FinishedAt.IsZero() {
+			c := *op
+			return &c, true
+		}
+	}
+	return nil, false
+}
+
 // Catalog lists the plugins offered by the build service.
 func (m *Manager) Catalog(ctx context.Context) ([]Package, error) {
 	return m.Builds.Packages(ctx)
