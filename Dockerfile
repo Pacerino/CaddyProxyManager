@@ -33,30 +33,25 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -o /out/cpm ./cmd/main.go
 
 # ---- Caddy ----
-# Without CADDY_PLUGINS, install the official static release rather than the
-# Alpine package, which can lag behind (older builds lack `list-modules --json`,
-# used by CPM to detect plugins). With CADDY_PLUGINS (a space-separated list of
-# Go module paths, optionally `@version`), build a custom Caddy via xcaddy.
+# Always built via xcaddy rather than the stock release: the build includes
+# caddy-json-schema, which the runtime stage uses to generate the schema CPM
+# reads for DNS provider forms. CADDY_PLUGINS (a space-separated list of Go
+# module paths, optionally `@version`) adds further plugins on top.
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS caddy
 ARG CADDY_VERSION=2.11.4
 ARG XCADDY_VERSION=0.4.5
+ARG CADDY_JSON_SCHEMA=github.com/abiosoft/caddy-json-schema
 ARG CADDY_PLUGINS=""
 ARG TARGETOS
 ARG TARGETARCH
 RUN set -eu; \
     mkdir -p /out; \
-    if [ -z "${CADDY_PLUGINS}" ]; then \
-      wget -qO /tmp/caddy.tar.gz \
-        "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_${TARGETARCH}.tar.gz"; \
-      tar -xzf /tmp/caddy.tar.gz -C /out caddy; \
-    else \
-      apk add --no-cache git; \
-      go install "github.com/caddyserver/xcaddy/cmd/xcaddy@v${XCADDY_VERSION}"; \
-      with=""; \
-      for p in ${CADDY_PLUGINS}; do with="${with} --with ${p}"; done; \
-      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-        xcaddy build "v${CADDY_VERSION}" ${with} --output /out/caddy; \
-    fi; \
+    apk add --no-cache git; \
+    go install "github.com/caddyserver/xcaddy/cmd/xcaddy@v${XCADDY_VERSION}"; \
+    with="--with ${CADDY_JSON_SCHEMA}"; \
+    for p in ${CADDY_PLUGINS}; do with="${with} --with ${p}"; done; \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+      xcaddy build "v${CADDY_VERSION}" ${with} --output /out/caddy; \
     chmod +x /out/caddy
 
 # ---- Runtime ----
@@ -64,6 +59,9 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=caddy /out/caddy /usr/local/bin/caddy
 RUN caddy version
+# The schema describes every module compiled into this Caddy; generating it
+# needs internet access (it fetches the Caddy docs), fine during the build.
+RUN mkdir -p /usr/share/cpm && caddy json-schema --output /usr/share/cpm/caddy_schema.json
 COPY --from=backend /out/cpm /usr/local/bin/cpm
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
@@ -73,7 +71,8 @@ ENV CPM_DATAFOLDER=/data \
     CPM_LOGFOLDER=/data/logs \
     CPM_CADDYFILE=/data/Caddyfile \
     CPM_CADDY_MODE=api \
-    CPM_CADDY_ADMINURL=http://localhost:2019
+    CPM_CADDY_ADMINURL=http://localhost:2019 \
+    CPM_CADDY_SCHEMAFILE=/usr/share/cpm/caddy_schema.json
 
 VOLUME ["/data"]
 EXPOSE 3001 80 443

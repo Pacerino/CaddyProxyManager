@@ -157,16 +157,16 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on GitHub-hoste
 docker build -t caddyproxymanager .
 ```
 
-The multi-stage build compiles the frontend and backend (a pure-Go build, no C toolchain required) into a small Alpine runtime that bundles Caddy.
+The multi-stage build compiles the frontend and backend (a pure-Go build, no C toolchain required) into a small Alpine runtime that bundles Caddy. Caddy is always built with [`xcaddy`](https://github.com/caddyserver/xcaddy), including [`caddy-json-schema`](https://github.com/abiosoft/caddy-json-schema), and the image ships the generated schema at `/usr/share/cpm/caddy_schema.json`. The build needs internet access (the schema generation fetches the Caddy docs).
 
-To bundle Caddy plugins, pass their Go module paths (optionally pinned with `@version`) and the image builds Caddy with [`xcaddy`](https://github.com/caddyserver/xcaddy) instead of downloading the stock release:
+To bundle Caddy plugins, pass their Go module paths (optionally pinned with `@version`) and they are added to the xcaddy build on top of `caddy-json-schema`:
 
 ```bash
 docker build -t caddyproxymanager:custom \
   --build-arg CADDY_PLUGINS="github.com/caddy-dns/cloudflare github.com/mholt/caddy-ratelimit" .
 ```
 
-`CADDY_VERSION` (default `2.11.4`) selects the Caddy release in both cases.
+`CADDY_VERSION` (default `2.11.4`) selects the Caddy release.
 
 ## ❓ FAQ
 
