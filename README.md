@@ -210,18 +210,21 @@ The `-dns` image flavor bundles these providers: [`cloudflare`](https://github.c
 
 On the **Plugins** page you can add or remove Caddy plugins without rebuilding the image. CPM asks the [Caddy download service](https://caddyserver.com/download) for a build containing the plugin, swaps Caddy over to it and rolls back automatically if Caddy does not come up healthy.
 
-- **Any registered plugin works.** Search the catalog or enter a Go module path (e.g. `github.com/mholt/caddy-ratelimit`). Plugins from the tested list (the ones bundled in the `-dns` image) are marked as tested; everything else is marked untested, so use it at your own risk.
+- **Any registered plugin works.** Search the catalog by package path or module name (e.g. `ratelimit` finds `github.com/mholt/caddy-ratelimit`) and pick a plugin from the results. Plugins from the tested list (the ones bundled in the `-dns` image) are marked as tested; everything else is marked untested, so use it at your own risk.
 - **Caddy version.** Caddy's build service always builds the latest Caddy release, so installing or removing a plugin also updates Caddy if the image ships an older one (CPM never downgrades).
 - **Restart note.** Switching binaries restarts Caddy, so there is a short interruption while the new build starts. Existing plugins stay pinned to their installed version; the new one is added at its latest version.
 - **Rollback.** CPM keeps the previous binary. If the new build fails to start, or applying your hosts to it reports errors, CPM switches back automatically and shows the error.
-- **Updates.** When a newer version of an installed plugin is available, the Plugins page shows an update banner and offers to update (it applies the same safe switch with rollback). A failed update is reported on the page.
+- **Updates.** When the image ships a newer Caddy than the managed binary runs (e.g. after pulling a new CPM image), the Plugins page shows an update banner and offers to rebuild your plugins on that Caddy version (the same safe switch with rollback). Turn on *Update automatically* to do this at startup. A failed update is reported on the page.
+- **Failures stay visible.** A failed or rolled-back change, or CPM switching back to the shipped Caddy because the managed binary could not start, is shown on the Plugins page until a later change succeeds.
 - **Disabling.** Set `CPM_PLUGIN_INSTALL=false` to turn installing off; the installed list stays visible but read-only.
 - **Internet access** is required to download builds. For offline setups use the `-dns` image flavor (or build your own with `CADDY_PLUGINS`) and keep plugin install disabled.
-- **Requirements.** API mode (`CPM_CADDY_MODE=api`) is required. The Docker image works out of the box because CPM supervises Caddy itself (`CPM_CADDY_SUPERVISE=true`); Caddy's certificates and autosave are stored in the `/data` volume. Managed binaries live in `<CPM_DATAFOLDER>/caddy-bin/`.
+- **Requirements.** API mode (`CPM_CADDY_MODE=api`) is required. The Docker image works out of the box because CPM supervises Caddy itself (`CPM_CADDY_SUPERVISE=true`); Caddy's certificates and autosave are stored in the `/data` volume. Managed binaries live in `<CPM_DATAFOLDER>/caddy-bin/`. CPM can only change a Caddy it runs or restarts on the same machine: with `CPM_CADDY_ADMINURL` pointing at another host or container, plugin install is disabled and the Plugins page says why.
 
 ### systemd setup
 
-Without Docker, Caddy runs under systemd and CPM can only restart the service, so the unit must start CPM's managed binary. The Plugins page detects this and shows the exact drop-in to install; it looks like this (adjust the path to your `CPM_DATAFOLDER`, keep your original arguments):
+Without Docker, Caddy runs under systemd and CPM can only restart the service, so the unit must start CPM's managed binary. CPM never touches the system binary (e.g. `/usr/bin/caddy`): when it starts, it copies the configured Caddy (`CPM_CADDY_BINARY`) into `<CPM_DATAFOLDER>/caddy-bin/` and makes that copy the managed binary (`caddy-bin/current`), so the unit keeps running the same Caddy after the switch. The copy is kept as the *seed*: whenever CPM has to fall back, it points `current` at the seed again instead of removing it.
+
+The Plugins page then shows the exact drop-in to install; it looks like this (adjust the path to your `CPM_DATAFOLDER`, keep your original arguments):
 
 ```ini
 # systemctl edit caddy.service
@@ -232,6 +235,38 @@ ExecStart=/etc/caddy/caddy-bin/current run --environ --config /etc/caddy/Caddyfi
 
 Then run `systemctl daemon-reload && systemctl restart caddy`. The service user must be able to read the managed binary and CPM needs permission to restart the unit. Run CPM with `CPM_CADDY_RELOADSTRATEGY=systemd` (the default).
 
+When your distribution updates its Caddy package, the managed binary stays on the copied version; the Plugins page then offers the update to the newer Caddy.
+
+### Going back to the shipped Caddy
+
+- **Docker:** remove the managed binary link and restart the container; CPM then runs the Caddy that ships with the image:
+
+  ```bash
+  docker exec cpm rm /data/caddy-bin/current
+  docker restart cpm
+  ```
+
+  CPM also does this by itself when the managed binary cannot start (for example after moving `/data` to a machine with another CPU architecture).
+- **systemd:** point `current` back at the seed (the copy of your original Caddy) and restart the service:
+
+  ```bash
+  cd <CPM_DATAFOLDER>/caddy-bin && ln -sfn "$(readlink seed)" current && rm -f previous
+  systemctl restart caddy
+  ```
+
+  To leave plugin management entirely, remove the drop-in (`systemctl revert caddy.service`) and restart Caddy.
+
+## ⬆️ Upgrading
+
+Images with plugin install keep Caddy's data under `/data`: `XDG_DATA_HOME=/data/.local/share` and `XDG_CONFIG_HOME=/data/.config`. Older images stored certificates under `/root/.local/share/caddy` (lost on container re-creation unless you mounted it) and the autosave under `/root/.config/caddy`. If you mounted either path, copy its contents into the data volume once, then drop the old mounts:
+
+```bash
+docker run --rm -v <old-certs-volume>:/old-data -v <old-config-volume>:/old-config -v cpm-data:/data alpine \
+  sh -c 'mkdir -p /data/.local/share/caddy /data/.config/caddy && cp -a /old-data/. /data/.local/share/caddy/ && cp -a /old-config/. /data/.config/caddy/'
+```
+
+Leave out the `/old-config` parts if you only mounted the certificates. Without the migration Caddy simply obtains new certificates (mind the Let's Encrypt rate limits for many domains).
+
 ## ⚠️ Limitations
 
 - Plugins and DNS providers require `CPM_CADDY_MODE=api`. In Caddyfile mode the plugin and DNS provider endpoints return `400`, and creating or updating a host with a DNS provider is rejected with `400` ("DNS providers are only available when CPM_CADDY_MODE=api"). Provider choices saved earlier in API mode are kept but ignored, and the Hosts page flags them.
@@ -239,7 +274,6 @@ Then run `systemctl daemon-reload && systemctl restart caddy`. The service user 
 ## 🗺️ Roadmap
 
 - [ ] Log viewer
-- [ ] Plugin management
 - [ ] Per-host advanced directives
 
 ## 🙌 Acknowledgements
