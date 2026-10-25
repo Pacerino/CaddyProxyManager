@@ -35,6 +35,9 @@ type caddy struct {
 	Binary string `json:"binary" envconfig:"optional,default=caddy"`
 	// Service is the systemd unit reloaded by the "systemd" strategy.
 	Service string `json:"service" envconfig:"optional,default=caddy.service"`
+	// SchemaFile is the path to Caddy's JSON schema (`caddy json-schema`
+	// output), used to generate DNS provider forms.
+	SchemaFile string `json:"schema_file" envconfig:"optional,default=/usr/share/cpm/caddy_schema.json"`
 }
 
 // oidc holds the OpenID Connect / OAuth2 configuration used when the auth

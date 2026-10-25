@@ -55,6 +55,34 @@
           "type": "string"
         }
       }
+    },
+    "dns.providers.fixture": {
+      "description": "fixture: object\nModule: dns.providers.fixture\nHand-written provider covering every type mapping.\n",
+      "type": "object",
+      "properties": {
+        "ttl": {
+          "description": "ttl: number\nModule: dns.providers.fixture\nRecord TTL.\n",
+          "type": "number"
+        },
+        "debug": {
+          "type": "boolean"
+        },
+        "region": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zones": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extra": {
+          "type": "object"
+        }
+      }
     }
   }
 }
