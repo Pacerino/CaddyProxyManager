@@ -4,7 +4,7 @@ set -e
 # Start Caddy in the background with just its admin API enabled. CPM (in the
 # default "api" mode) then manages the HTTP config through that admin API.
 # Mount a custom config at /data/caddy.json to override this behaviour.
-CADDY_CONFIG="${CADDY_CONFIG:-/data/caddy.json}"
+CADDY_CONFIG="${CADDY_CONFIG:-${CPM_CADDY_CONFIGFILE:-/data/caddy.json}}"
 
 mkdir -p "$(dirname "$CADDY_CONFIG")"
 if [ ! -f "$CADDY_CONFIG" ]; then
@@ -18,7 +18,9 @@ fi
 
 # When CPM supervises Caddy itself (API mode only) it starts, restarts and
 # switches the binary on plugin changes, so the entrypoint must not start one.
-if [ "${CPM_CADDY_SUPERVISE:-}" = "true" ] && [ "${CPM_CADDY_MODE:-api}" = "api" ]; then
+supervise="$(printf %s "${CPM_CADDY_SUPERVISE:-}" | tr '[:upper:]' '[:lower:]')"
+mode="$(printf %s "${CPM_CADDY_MODE:-api}" | tr '[:upper:]' '[:lower:]')"
+if [ "$supervise" = "true" ] && [ "$mode" = "api" ]; then
   echo "Starting Caddy Proxy Manager (supervising Caddy)…"
   exec /usr/local/bin/cpm
 fi
