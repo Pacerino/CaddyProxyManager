@@ -92,7 +92,7 @@ func newModelsTestDB(t *testing.T) *gorm.DB {
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := db.AutoMigrate(&Host{}, &Upstream{}, &HostPlugin{}, &DNSProvider{}); err != nil {
+	if err := db.AutoMigrate(&Host{}, &Upstream{}, &HostPlugin{}, &DNSProvider{}, &Setting{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db
@@ -155,5 +155,30 @@ func TestShortName(t *testing.T) {
 		if got := ShortName(in); got != want {
 			t.Errorf("ShortName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestSettings(t *testing.T) {
+	db := newModelsTestDB(t)
+	if got := GetSetting(db, "plugins.autoUpdate", "false"); got != "false" {
+		t.Fatalf("default: %q", got)
+	}
+	if err := SetSetting(db, "plugins.autoUpdate", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetSetting(db, "plugins.autoUpdate", "false"); got != "true" {
+		t.Fatalf("after set: %q", got)
+	}
+	// Overwrite an existing key.
+	if err := SetSetting(db, "plugins.autoUpdate", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetSetting(db, "plugins.autoUpdate", "true"); got != "false" {
+		t.Fatalf("after overwrite: %q", got)
+	}
+	var n int64
+	db.Model(&Setting{}).Count(&n)
+	if n != 1 {
+		t.Fatalf("rows: %d", n)
 	}
 }

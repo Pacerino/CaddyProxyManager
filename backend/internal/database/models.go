@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Host struct {
@@ -123,4 +124,26 @@ type User struct {
 	Provider string `json:"provider" gorm:"default:local"`
 	// Subject is the OIDC subject identifier (sub claim), empty for local users.
 	Subject string `json:"subject,omitempty" gorm:"index"`
+}
+
+// Setting is a key/value pair for settings changed at runtime from the UI.
+type Setting struct {
+	Key   string `gorm:"primaryKey"`
+	Value string
+}
+
+// GetSetting returns the value stored for key, or def when it is unset or
+// cannot be read.
+func GetSetting(db *gorm.DB, key, def string) string {
+	var s []Setting
+	// Find with Limit, unlike Take, doesn't log a missing key as an error.
+	if err := db.Where(&Setting{Key: key}).Limit(1).Find(&s).Error; err != nil || len(s) == 0 {
+		return def
+	}
+	return s[0].Value
+}
+
+// SetSetting stores value under key, replacing any previous value.
+func SetSetting(db *gorm.DB, key, value string) error {
+	return db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&Setting{Key: key, Value: value}).Error
 }
