@@ -49,6 +49,18 @@ Then open <http://localhost:3001> and sign in with the default credentials:
 
 The container starts Caddy (with its admin API) and CPM in `api` mode. Mount your own Caddy config at `/data/caddy.json` to customise it.
 
+### Image tags
+
+Images are published for `linux/amd64` and `linux/arm64` in two flavors:
+
+| Tag | Contents |
+| --- | --- |
+| `latest`, `<version>`, `<major>.<minor>` | Newest stable release with the stock Caddy build. |
+| `latest-dns`, `<version>-dns`, … | Same, with Caddy built with the [`cloudflare`](https://github.com/caddy-dns/cloudflare), [`duckdns`](https://github.com/caddy-dns/duckdns) and [`porkbun`](https://github.com/caddy-dns/porkbun) DNS providers for ACME DNS-01 challenges. |
+
+> [!NOTE]
+> Images are only published for version tags. Pre-releases (e.g. `v3.2.0-rc1`) get their exact version tag but never move `latest`.
+
 ## 🏗️ How it works
 
 ```
@@ -133,10 +145,11 @@ cd ../backend && go build ./cmd/main.go
 
 ```bash
 cd backend && go test ./...       # backend
+cd frontend && npm run test       # frontend unit tests
 cd frontend && npm run build      # frontend type-check + build
 ```
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the backend tests, builds the frontend, and publishes the Docker image to GHCR on pushes to `master` and version tags.
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on GitHub-hosted runners. It runs the backend and frontend tests, and builds the multi-arch Docker images (both flavors) on every PR and push to `master`. Nothing is published automatically: only pushing a version tag (`v*`) publishes the images to GHCR and creates a GitHub release with cross-compiled binaries.
 
 ## 🐳 Building the image yourself
 
@@ -145,6 +158,15 @@ docker build -t caddyproxymanager .
 ```
 
 The multi-stage build compiles the frontend and backend (a pure-Go build, no C toolchain required) into a small Alpine runtime that bundles Caddy.
+
+To bundle Caddy plugins, pass their Go module paths (optionally pinned with `@version`) and the image builds Caddy with [`xcaddy`](https://github.com/caddyserver/xcaddy) instead of downloading the stock release:
+
+```bash
+docker build -t caddyproxymanager:custom \
+  --build-arg CADDY_PLUGINS="github.com/caddy-dns/cloudflare github.com/mholt/caddy-ratelimit" .
+```
+
+`CADDY_VERSION` (default `2.11.4`) selects the Caddy release in both cases.
 
 ## ❓ FAQ
 

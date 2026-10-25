@@ -8,14 +8,13 @@ on:
     branches: [master]
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
-# Cancel superseded runs for the same ref. Useful on a single self-hosted
-# runner so a new push doesn't queue behind an outdated run.
+# Cancel superseded PR runs; let master and tag runs always finish so every
+# merge and release gets its image.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
@@ -23,7 +22,7 @@ env:
 jobs:
   test-backend:
     name: Test backend
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     # The project uses a pure-Go sqlite driver, so no C toolchain is needed.
     env:
       CGO_ENABLED: "0"
@@ -34,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       # The backend embeds frontend assets; provide a placeholder so it builds.
       - name: Create embed placeholder
@@ -46,7 +45,7 @@ jobs:
 
   test-frontend:
     name: Test & build frontend
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
@@ -58,7 +57,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
-        run: npm ci || npm install
+        run: npm ci
       - name: Test
         run: npm run test
       - name: Type-check and build
@@ -67,80 +66,94 @@ jobs:
           npm run build
 
   docker:
-    name: Build & publish image
-    runs-on: self-hosted
+    name: ${{ startsWith(github.ref, 'refs/tags/v') && 'Build & publish' || 'Build' }} image (${{ matrix.flavor }})
+    runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
-    # Only push on master pushes and version tags, not on PRs.
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Stock Caddy release.
+          - flavor: default
+            suffix: ""
+            plugins: ""
+          # Caddy built with common DNS providers for ACME DNS-01 challenges.
+          - flavor: dns
+            suffix: "-dns"
+            plugins: >-
+              github.com/caddy-dns/cloudflare
+              github.com/caddy-dns/duckdns
+              github.com/caddy-dns/porkbun
     steps:
       - uses: actions/checkout@v4
+
+      # QEMU is only needed for the few RUN steps in the runtime stage; all
+      # compilation is cross-compiled natively (see Dockerfile).
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Images are only published for version tags; PRs and master pushes
+      # just build them to verify.
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # `latest` (and `latest-dns`) follow the newest stable release tag.
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=auto
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
-          # Local cache persists on the self-hosted runner's disk between runs.
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      # Replace the old cache with the new one to keep it from growing
-      # unbounded across runs.
-      - name: Rotate build cache
-        if: always()
-        run: |
-          rm -rf /tmp/.buildx-cache
-          if [ -d /tmp/.buildx-cache-new ]; then
-            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-          fi
+            CADDY_PLUGINS=${{ matrix.plugins }}
+          cache-from: type=gha,scope=${{ matrix.flavor }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.flavor }}
 
   release:
     name: Build binaries & release
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test-backend, test-frontend]
     # Only build downloadable binaries and a release on version tags.
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     env:
       CGO_ENABLED: "0"
-      # Limit compiler parallelism to keep peak memory down on the self-hosted
-      # runner (exit 143 / SIGTERM was an OOM kill during cross-compilation).
-      GOFLAGS: "-p=2"
-      GOMAXPROCS: "2"
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
       - uses: actions/setup-node@v4
@@ -153,7 +166,7 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: |
-          npm ci || npm install
+          npm ci
           npm run build
 
       # Cross-compile a static, pure-Go binary for each target and package it.
