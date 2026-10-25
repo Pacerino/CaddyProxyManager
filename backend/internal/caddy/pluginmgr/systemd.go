@@ -34,6 +34,11 @@ type SetupStatus struct {
 	DropIn string     `json:"dropIn,omitempty"`
 }
 
+// Switchable reports whether CPM can restart Caddy on a managed binary.
+func (s SetupStatus) Switchable() bool {
+	return s.State == SetupSupervised || s.State == SetupReady
+}
+
 // SetupConfig carries the settings DetectSetup needs.
 type SetupConfig struct {
 	Supervise      bool

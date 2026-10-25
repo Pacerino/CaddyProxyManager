@@ -1,6 +1,10 @@
 package config
 
-import "github.com/Pacerino/CaddyProxyManager/internal/logger"
+import (
+	"path/filepath"
+
+	"github.com/Pacerino/CaddyProxyManager/internal/logger"
+)
 
 // IsSetup defines whether we have an admin user or not
 var IsSetup bool
@@ -41,6 +45,18 @@ type caddy struct {
 	// Supervise makes CPM start and supervise the Caddy process itself
 	// (CPM_CADDY_SUPERVISE).
 	Supervise bool `json:"supervise" envconfig:"optional,default=false"`
+	// ConfigFile is the JSON config the supervised Caddy starts with
+	// (CPM_CADDY_CONFIGFILE). Empty means <DataFolder>/caddy.json; see
+	// CaddyConfigFile.
+	ConfigFile string `json:"config_file" envconfig:"optional"`
+}
+
+// CaddyConfigFile returns the config file of the supervised Caddy.
+func CaddyConfigFile() string {
+	if Configuration.Caddy.ConfigFile != "" {
+		return Configuration.Caddy.ConfigFile
+	}
+	return filepath.Join(Configuration.DataFolder, "caddy.json")
 }
 
 // oidc holds the OpenID Connect / OAuth2 configuration used when the auth

@@ -205,6 +205,27 @@ func (m *Manager) Get(id string) (*Operation, bool) {
 	return &c, true
 }
 
+// Running returns a copy of the operation in progress, if any. Operations
+// run one at a time, so while busy it is the most recently started one.
+func (m *Manager) Running() (*Operation, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.busy || len(m.order) == 0 {
+		return nil, false
+	}
+	op, ok := m.ops[m.order[len(m.order)-1]]
+	if !ok {
+		return nil, false
+	}
+	c := *op
+	return &c, true
+}
+
+// Catalog lists the plugins offered by the build service.
+func (m *Manager) Catalog(ctx context.Context) ([]Package, error) {
+	return m.Builds.Packages(ctx)
+}
+
 func (m *Manager) setStep(id string, step OpStep) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

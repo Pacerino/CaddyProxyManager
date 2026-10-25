@@ -100,3 +100,16 @@ func TestSystemdRestarter(t *testing.T) {
 	}
 	var _ Restarter = &SystemdRestarter{}
 }
+
+func TestSetupStatus_Switchable(t *testing.T) {
+	for state, want := range map[SetupState]bool{
+		SetupSupervised:  true,
+		SetupReady:       true,
+		SetupNeeded:      false,
+		SetupUnsupported: false,
+	} {
+		if got := (SetupStatus{State: state}).Switchable(); got != want {
+			t.Errorf("%s: Switchable = %v, want %v", state, got, want)
+		}
+	}
+}

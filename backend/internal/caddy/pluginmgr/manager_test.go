@@ -650,9 +650,15 @@ func TestBusy(t *testing.T) {
 	if _, err := e.m.Start(OpRemove, duckdns); !errors.Is(err, ErrBusy) {
 		t.Fatalf("want ErrBusy, got %v", err)
 	}
+	if run, ok := e.m.Running(); !ok || run.ID != op.ID {
+		t.Fatalf("Running = %+v, %v; want %s", run, ok, op.ID)
+	}
 	close(e.restart.block)
 	if done := waitOp(t, e.m, op.ID); done.Step != StepDone {
 		t.Fatalf("op: %+v", done)
+	}
+	if run, ok := e.m.Running(); ok {
+		t.Fatalf("Running after finish = %+v", run)
 	}
 	// Free again once the first finished.
 	if op2, err := e.m.Start(OpRemove, ratelimit); err != nil {
