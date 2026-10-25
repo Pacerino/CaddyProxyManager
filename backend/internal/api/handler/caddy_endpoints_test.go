@@ -109,6 +109,12 @@ func TestRedactDNSProviders(t *testing.T) {
 	for _, c := range []struct{ path, in, want string }{
 		{"apps/tls/automation/policies/0/issuers/0/challenges/dns", `{"provider":{"name":"x","k":"v"}}`, `{"provider":{"k":"********","name":"x"}}`},
 		{"apps/tls/automation/policies/0/issuers/0/challenges/dns/provider", `{"name":"x","k":"v"}`, `{"k":"********","name":"x"}`},
+		{"/apps/tls/automation/policies/0/issuers/0/challenges/dns/provider/", `{"name":"x","k":"v"}`, `{"k":"********","name":"x"}`},
+		// The challenges object itself, and single provider values.
+		{"apps/tls/automation/policies/0/issuers/0/challenges", `{"dns":{"provider":{"name":"x","k":"v"}}}`, `{"dns":{"provider":{"k":"********","name":"x"}}}`},
+		{"apps/tls/automation/policies/0/issuers/0/challenges/dns/provider/api_token", `"s3cret"`, `"********"`},
+		{"apps/tls/automation/policies/0/issuers/0/challenges/dns/provider/nested/a", `1`, `"********"`},
+		{"apps/tls/automation/policies/0/issuers/0/challenges/dns/provider/name", `"cloudflare"`, `"cloudflare"`},
 	} {
 		out, err := redactDNSProviders(c.path, json.RawMessage(c.in))
 		if err != nil || string(out) != c.want {

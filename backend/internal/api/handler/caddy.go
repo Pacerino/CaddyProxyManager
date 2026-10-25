@@ -89,14 +89,37 @@ func redactDNSProviders(path string, raw json.RawMessage) (json.RawMessage, erro
 	if err := dec.Decode(&v); err != nil {
 		return nil, err
 	}
-	trimmed := strings.Trim(path, "/")
 	changed := false
+	// Locate the requested subtree relative to the last "challenges" segment,
+	// so reads of the challenges, dns or provider object, or of a single
+	// provider value, are masked as well as whole-config reads.
+	segs := strings.FieldsFunc(path, func(r rune) bool { return r == '/' })
+	rest := []string(nil)
+	for i := len(segs) - 1; i >= 0; i-- {
+		if segs[i] == "challenges" {
+			rest = segs[i+1:]
+			break
+		}
+	}
 	switch {
-	case trimmed == "challenges/dns/provider" || strings.HasSuffix(trimmed, "/challenges/dns/provider"):
-		changed = redactProvider(v)
-	case trimmed == "challenges/dns" || strings.HasSuffix(trimmed, "/challenges/dns"):
+	case rest == nil:
+		changed = redactWalk(v)
+	case len(rest) == 0:
+		if m, ok := v.(map[string]any); ok {
+			if dns, ok := m["dns"].(map[string]any); ok {
+				changed = redactProvider(dns["provider"])
+			}
+		}
+	case len(rest) == 1 && rest[0] == "dns":
 		if m, ok := v.(map[string]any); ok {
 			changed = redactProvider(m["provider"])
+		}
+	case len(rest) == 2 && rest[0] == "dns" && rest[1] == "provider":
+		changed = redactProvider(v)
+	case len(rest) > 2 && rest[0] == "dns" && rest[1] == "provider":
+		// A single value inside the provider: only the module name is safe.
+		if rest[2] != "name" {
+			v, changed = redactedValue, true
 		}
 	default:
 		changed = redactWalk(v)
