@@ -84,6 +84,9 @@ func createDNSProvider(t *testing.T, h Handler, name, moduleID string, values ma
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create %s: status %d (%s)", name, rec.Code, rec.Body.String())
 	}
+	if strings.Contains(rec.Body.String(), "s3cret") {
+		t.Fatalf("create response leaks secret: %s", rec.Body.String())
+	}
 	var v dnsProviderView
 	decodeResult(t, rec, &v)
 	return v
@@ -202,6 +205,9 @@ func TestDNSProviders_UpdateKeepsSecret(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status %d (%s)", code, body)
 	}
+	if strings.Contains(body, "s3cret") {
+		t.Errorf("update response leaks secret: %s", body)
+	}
 	cfg := storedConfig(t, h, p.ID)
 	if cfg["api_token"] != "s3cret" || cfg["zone_id"] != "z2" {
 		t.Errorf("stored config = %v", cfg)
@@ -217,7 +223,10 @@ func TestDNSProviders_UpdateKeepsSecret(t *testing.T) {
 	if cfg := storedConfig(t, h, p.ID); cfg["api_token"] != "s3cret" {
 		t.Errorf("absent secret dropped: %v", cfg)
 	}
-	putDNSProvider(h, p.ID, map[string]any{"name": "renamed", "moduleId": cloudflareID, "values": map[string]any{"api_token": "n3w"}})
+	_, body = putDNSProvider(h, p.ID, map[string]any{"name": "renamed", "moduleId": cloudflareID, "values": map[string]any{"api_token": "n3w"}})
+	if strings.Contains(body, "n3w") || strings.Contains(body, "s3cret") {
+		t.Errorf("update response leaks secret: %s", body)
+	}
 	if cfg := storedConfig(t, h, p.ID); cfg["api_token"] != "n3w" {
 		t.Errorf("secret not replaced: %v", cfg)
 	}
