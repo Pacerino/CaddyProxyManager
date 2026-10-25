@@ -182,14 +182,14 @@ export function InstalledPluginsSection({ onChanged }: Props) {
       ) : (
         state && (
           <>
-            {!state.installEnabled && (
+            {!state.installEnabled && setup?.state !== "setup-needed" && (
               <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
                 {state.disabledReason ||
                   setup?.reason ||
                   "Installing plugins is not available."}
               </div>
             )}
-            {state.installEnabled && setup?.state === "setup-needed" && (
+            {setup?.state === "setup-needed" && (
               <div className="space-y-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
                 <p className="text-muted-foreground">{setup.reason}</p>
                 {setup.dropIn && (

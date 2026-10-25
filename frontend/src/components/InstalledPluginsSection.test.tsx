@@ -66,6 +66,12 @@ describe("AddPluginDialog", () => {
     expect(post).toHaveBeenCalledWith("/caddy/plugins", { path: "github.com/b/untested" });
   });
 
+  it("shows an unavailable state when the catalog is unreachable", async () => {
+    get.mockRejectedValue({ response: { status: 503, data: { error: { message: "build service down" } } } });
+    render(<AddPluginDialog open onOpenChange={() => {}} onStarted={() => {}} />);
+    expect(await screen.findByText("Plugin catalog unavailable: build service down")).toBeTruthy();
+  });
+
   it("debounces the search by 300 ms", async () => {
     vi.useFakeTimers();
     mockGet(baseState, catalog);
@@ -96,9 +102,16 @@ describe("InstalledPluginsSection", () => {
   });
 
   it("shows the drop-in when setup is needed", async () => {
-    mockGet({ ...baseState, setup: { state: "setup-needed", reason: "Run this once", dropIn: "[Service]\nFoo=bar" } });
+    mockGet({
+      ...baseState,
+      installEnabled: false,
+      disabledReason: "Run this once",
+      setup: { state: "setup-needed", reason: "Run this once", dropIn: "[Service]\nFoo=bar" },
+    });
     render(<InstalledPluginsSection />);
     expect(await screen.findByText("Run this once")).toBeTruthy();
+    expect(screen.getAllByText("Run this once")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
     expect(screen.getByText(/Foo=bar/).tagName).toBe("PRE");
   });
 

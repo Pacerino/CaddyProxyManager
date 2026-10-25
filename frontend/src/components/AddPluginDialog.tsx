@@ -59,8 +59,10 @@ export function AddPluginDialog({ open, onOpenChange, onStarted }: Props) {
         if (cancelled) return;
         setResults([]);
         setCatalogError(
-          (err as ApiError).response?.data?.error?.message ??
-            "The plugin catalog is unreachable"
+          `Plugin catalog unavailable: ${
+            (err as ApiError).response?.data?.error?.message ??
+            "the build service is unreachable"
+          }`
         );
       } finally {
         if (!cancelled) setLoading(false);
