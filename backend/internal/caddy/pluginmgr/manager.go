@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,10 @@ const (
 // SettingAutoUpdate is the settings key ("true"/"false") that makes CPM
 // rebuild the plugin set on a newer shipped Caddy at startup.
 const SettingAutoUpdate = "plugins.autoUpdate"
+
+// SettingRequested is the settings key holding the JSON array of package
+// paths requested by the last successful operation.
+const SettingRequested = "plugins.requested"
 
 const (
 	maxOperations = 20
@@ -94,6 +99,9 @@ type Manager struct {
 	// successful switch; a caddy_schema.sha256 sidecar is written next to it.
 	SchemaOut string
 	OS, Arch  string
+	// DB stores the requested package paths (SettingRequested). Without it,
+	// installed plugins are re-requested by their Go module path.
+	DB *gorm.DB
 	// OnChanged, if set, is called when an operation that switched binaries
 	// ends (done, rolled back, or failed after the switch).
 	OnChanged func()
@@ -247,7 +255,7 @@ func (m *Manager) execute(ctx context.Context, id string, kind OpKind, pkg strin
 	if err != nil {
 		return StepFailed, false, fmt.Errorf("reading the Caddy version: %w", err)
 	}
-	pkgs, err := requestedPackages(kind, pkg, installed)
+	pkgs, err := requestedPackages(kind, pkg, installed, m.loadRequested())
 	if err != nil {
 		return StepFailed, false, err
 	}
@@ -271,9 +279,49 @@ func (m *Manager) execute(ctx context.Context, id string, kind OpKind, pkg strin
 
 	if cur, ok := m.Store.Current(); ok && cur == path {
 		// The build is byte-identical to the running binary.
+		m.saveRequested(pkgs)
 		return StepDone, false, nil
 	}
-	return m.switchTo(ctx, id, path, sum)
+	step, switched, err := m.switchTo(ctx, id, path, sum)
+	if step == StepDone {
+		m.saveRequested(pkgs)
+	}
+	return step, switched, err
+}
+
+// loadRequested returns the package paths of the last successful operation.
+func (m *Manager) loadRequested() []string {
+	if m.DB == nil {
+		return nil
+	}
+	raw := database.GetSetting(m.DB, SettingRequested, "")
+	if raw == "" {
+		return nil
+	}
+	var paths []string
+	if err := json.Unmarshal([]byte(raw), &paths); err != nil {
+		logger.Warn("Reading the requested plugin paths: %v", err)
+		return nil
+	}
+	return paths
+}
+
+// saveRequested records the package paths (without versions) of a build.
+func (m *Manager) saveRequested(pkgs []PinnedPackage) {
+	if m.DB == nil {
+		return
+	}
+	paths := make([]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		paths = append(paths, p.Path)
+	}
+	data, err := json.Marshal(paths)
+	if err == nil {
+		err = database.SetSetting(m.DB, SettingRequested, string(data))
+	}
+	if err != nil {
+		logger.Warn("Saving the requested plugin paths: %v", err)
+	}
 }
 
 // discard deletes a downloaded binary unless the store still links it.

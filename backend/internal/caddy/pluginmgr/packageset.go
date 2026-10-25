@@ -1,38 +1,98 @@
 package pluginmgr
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
+// underModule reports whether the package path lies in the Go module
+// modPath: it is the module root or a subdirectory of it.
+func underModule(path, modPath string) bool {
+	return path == modPath || strings.HasPrefix(path, modPath+"/")
+}
+
+// owningModule returns the installed module that contains the package path
+// (the longest matching module path).
+func owningModule(path string, installed []InstalledPackage) (InstalledPackage, bool) {
+	var best InstalledPackage
+	found := false
+	for _, m := range installed {
+		if underModule(path, m.Path) && (!found || len(m.Path) > len(best.Path)) {
+			best, found = m, true
+		}
+	}
+	return best, found
+}
+
+// currentPackages maps the installed modules to the package paths to request
+// for them. Installed lists Go module paths, while a registered package may
+// live in a module subdirectory (e.g. github.com/x/plug/http), so every
+// previously requested path inside an installed module is requested again,
+// pinned at that module's version. A module without a requested path falls
+// back to the module path, as for the plugins of the shipped binary.
+func currentPackages(installed []InstalledPackage, requested []string) []PinnedPackage {
+	byModule := map[string][]string{}
+	seen := map[string]bool{}
+	for _, r := range requested {
+		if seen[r] {
+			continue
+		}
+		seen[r] = true
+		if m, ok := owningModule(r, installed); ok {
+			byModule[m.Path] = append(byModule[m.Path], r)
+		}
+	}
+	var out []PinnedPackage
+	for _, m := range installed {
+		paths := byModule[m.Path]
+		if len(paths) == 0 {
+			paths = []string{m.Path}
+		}
+		for _, p := range paths {
+			out = append(out, PinnedPackage{Path: p, Version: m.Version})
+		}
+	}
+	return out
+}
+
 // requestedPackages computes the package list of the build for an operation
-// from the packages installed in the active binary. Existing packages stay
-// pinned at their installed version so a rebuild never upgrades them; an
-// added package is requested unpinned (latest). JSONSchemaPackage is always
-// part of the request.
-func requestedPackages(kind OpKind, pkg string, installed []InstalledPackage) ([]PinnedPackage, error) {
+// from the modules installed in the active binary and the package paths
+// requested by the last successful operation. Existing packages stay pinned
+// at their installed version so a rebuild never upgrades them; an added
+// package is requested unpinned (latest), or pinned at its module's version
+// when that module is already installed. Removing a path drops every
+// requested path under it. JSONSchemaPackage is always part of the request.
+func requestedPackages(kind OpKind, pkg string, installed []InstalledPackage, requested []string) ([]PinnedPackage, error) {
+	current := currentPackages(installed, requested)
 	var out []PinnedPackage
 	found, hasSchema := false, false
-	for _, p := range installed {
+	for _, p := range current {
 		if p.Path == pkg {
 			found = true
-			if kind == OpRemove {
-				continue
-			}
+		}
+		if kind == OpRemove && underModule(p.Path, pkg) {
+			found = true
+			continue
 		}
 		if p.Path == JSONSchemaPackage {
 			hasSchema = true
 		}
-		out = append(out, PinnedPackage{Path: p.Path, Version: p.Version})
+		out = append(out, p)
 	}
 	switch kind {
 	case OpAdd:
 		if found {
 			return nil, fmt.Errorf("%s is already installed", pkg)
 		}
-		out = append(out, PinnedPackage{Path: pkg})
+		added := PinnedPackage{Path: pkg}
+		if m, ok := owningModule(pkg, installed); ok {
+			// One Go module can only be built at one version.
+			added.Version = m.Version
+		}
+		out = append(out, added)
 	case OpRemove:
 		if !found {
 			return nil, fmt.Errorf("%s is not installed", pkg)
@@ -45,8 +105,9 @@ func requestedPackages(kind OpKind, pkg string, installed []InstalledPackage) ([
 }
 
 // verifyBinary checks a downloaded binary before it may run as the live
-// Caddy: it reports the expected Caddy version, contains every requested
-// package (pinned ones at the requested version) and loads the live config.
+// Caddy: it reports the expected Caddy version, contains the module of every
+// requested package (pinned ones at the requested version) and loads the
+// live config.
 func verifyBinary(ctx context.Context, insp Inspector, bin, wantVersion string, want []PinnedPackage, liveConfig []byte) error {
 	v, err := insp.Version(ctx, bin)
 	if err != nil {
@@ -60,24 +121,29 @@ func verifyBinary(ctx context.Context, insp Inspector, bin, wantVersion string, 
 	if err != nil {
 		return fmt.Errorf("listing packages of the new binary: %w", err)
 	}
-	have := make(map[string]string, len(got))
-	for _, p := range got {
-		have[p.Path] = p.Version
-	}
 	for _, p := range want {
-		hv, ok := have[p.Path]
+		m, ok := owningModule(p.Path, got)
 		if !ok {
 			return fmt.Errorf("new binary lacks package %s", p.Path)
 		}
-		if p.Version != "" && hv != p.Version {
-			return fmt.Errorf("new binary has %s %s, expected %s", p.Path, hv, p.Version)
+		if p.Version != "" && m.Version != p.Version {
+			return fmt.Errorf("new binary has %s %s, expected %s", m.Path, m.Version, p.Version)
 		}
 	}
 
-	if err := insp.Validate(ctx, bin, liveConfig); err != nil {
+	if err := insp.Validate(ctx, bin, normalizeConfig(liveConfig)); err != nil {
 		return fmt.Errorf("current config does not load on the new binary: %w", err)
 	}
 	return nil
+}
+
+// normalizeConfig turns the empty config of a fresh Caddy (no body or a
+// literal null) into an empty JSON object that validate accepts.
+func normalizeConfig(cfg []byte) []byte {
+	if t := bytes.TrimSpace(cfg); len(t) == 0 || string(t) == "null" {
+		return []byte("{}")
+	}
+	return cfg
 }
 
 // compareSemver compares two semantic versions with an optional "v" prefix

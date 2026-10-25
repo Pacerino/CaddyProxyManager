@@ -52,7 +52,8 @@ func (f fakeBin) script() string {
 		deps.WriteString("dep\t" + p.Path + "\t" + p.Version + "\th1:y\n")
 	}
 	modsJSON, _ := json.Marshal(mods)
-	validate := `echo "Valid configuration"`
+	// Like caddy validate, reject a config file without a JSON object.
+	validate := `if [ ! -s "$3" ] || grep -qx 'null' "$3"; then echo "empty config" >&2; exit 1; fi; echo "Valid configuration"`
 	if f.ValidateErr != "" {
 		validate = fmt.Sprintf("echo %q >&2; exit 1", f.ValidateErr)
 	}
@@ -99,6 +100,7 @@ type fakeBuilds struct {
 	version     string // overrides the reported Caddy version
 	drop        string // package left out of the built binary
 	validateErr string
+	modules     map[string]string // package path -> module path, default identity
 }
 
 func (f *fakeBuilds) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +125,11 @@ func (f *fakeBuilds) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if pkgPath == f.drop {
 			continue
 		}
-		bin.Packages = append(bin.Packages, InstalledPackage{Path: pkgPath, Version: ver, Modules: moduleFor(pkgPath)})
+		mod := pkgPath
+		if mp, ok := f.modules[pkgPath]; ok {
+			mod = mp
+		}
+		bin.Packages = append(bin.Packages, InstalledPackage{Path: mod, Version: ver, Modules: moduleFor(pkgPath)})
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	_, _ = w.Write([]byte(bin.script()))
@@ -235,6 +241,7 @@ func newEnv(t *testing.T) *testEnv {
 		LiveConfig:    func(context.Context) ([]byte, error) { return []byte(`{"apps":{}}`), nil },
 		Reconcile:     e.rec.Run,
 		ShippedBinary: e.shipped,
+		DB:            newSettingsDB(t),
 		SchemaOut:     filepath.Join(dir, "caddy_schema.json"),
 		OS:            "linux",
 		Arch:          "amd64",
@@ -883,5 +890,138 @@ func TestOperation_JSON(t *testing.T) {
 	}
 	if strings.Contains(s, "finishedAt") {
 		t.Errorf("zero finishedAt should be omitted: %s", s)
+	}
+}
+
+const (
+	subPkg    = "github.com/x/plug/http"
+	subModule = "github.com/x/plug"
+)
+
+func requestedSetting(t *testing.T, e *testEnv) []string {
+	t.Helper()
+	var paths []string
+	if err := json.Unmarshal([]byte(database.GetSetting(e.m.DB, SettingRequested, "[]")), &paths); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func sortedParams(q url.Values) string {
+	p := append([]string(nil), q["p"]...)
+	sort.Strings(p)
+	return strings.Join(p, ",")
+}
+
+func TestSubdirectoryPackage_AddRepinRemove(t *testing.T) {
+	e := newEnv(t)
+	e.builds.modules = map[string]string{subPkg: subModule}
+
+	// Installing a package that lives in a module subdirectory verifies
+	// against its module and records the requested path.
+	if op := e.run(t, OpAdd, subPkg); op.Step != StepDone {
+		t.Fatalf("add subdirectory package: %+v", op)
+	}
+	if got := strings.Join(requestedSetting(t, e), ","); got != JSONSchemaPackage+","+duckdns+","+subPkg {
+		t.Fatalf("requested setting: %s", got)
+	}
+
+	// The next build re-pins the subdirectory path, not the module root.
+	if op := e.run(t, OpAdd, ratelimit); op.Step != StepDone {
+		t.Fatalf("second add: %+v", op)
+	}
+	want := strings.Join([]string{duckdns + "@v0.5.0", JSONSchemaPackage + "@" + jsonSchemaV, ratelimit, subPkg + "@" + latestPkgVer}, ",")
+	if got := sortedParams(e.builds.lastRequest(t)); got != sortedSlice(want) {
+		t.Fatalf("packages: got %s want %s", got, sortedSlice(want))
+	}
+
+	// Removing the module (as the installed list shows it) drops the path.
+	if op := e.run(t, OpRemove, subModule); op.Step != StepDone {
+		t.Fatalf("remove: %+v", op)
+	}
+	if got := sortedParams(e.builds.lastRequest(t)); strings.Contains(got, subModule) {
+		t.Fatalf("removed package still requested: %s", got)
+	}
+	for _, p := range requestedSetting(t, e) {
+		if strings.HasPrefix(p, subModule) {
+			t.Fatalf("removed package still recorded: %v", requestedSetting(t, e))
+		}
+	}
+}
+
+func sortedSlice(csv string) string {
+	p := strings.Split(csv, ",")
+	sort.Strings(p)
+	return strings.Join(p, ",")
+}
+
+func TestRequestedPackages_Subdirectories(t *testing.T) {
+	installed := []InstalledPackage{
+		{Path: JSONSchemaPackage, Version: jsonSchemaV},
+		{Path: duckdns, Version: "v0.5.0"},
+		{Path: subModule, Version: "v1.2.0"},
+	}
+	requested := []string{JSONSchemaPackage, subPkg, subModule + "/admin", "github.com/gone/plugin"}
+
+	got, err := requestedPackages(OpUpdate, "", installed, requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var params []string
+	for _, p := range got {
+		params = append(params, p.Param())
+	}
+	sort.Strings(params)
+	want := []string{duckdns + "@v0.5.0", JSONSchemaPackage + "@" + jsonSchemaV, subModule + "/admin@v1.2.0", subPkg + "@v1.2.0"}
+	sort.Strings(want)
+	if strings.Join(params, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v want %v", params, want)
+	}
+
+	// Removing one subdirectory path keeps its sibling.
+	got, err = requestedPackages(OpRemove, subPkg, installed, requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range got {
+		if p.Path == subPkg {
+			t.Fatalf("not removed: %v", got)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %v", got)
+	}
+
+	// Adding a sibling of an installed module pins it to the module version.
+	got, err = requestedPackages(OpAdd, subModule+"/extra", installed, requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last := got[len(got)-1]; last.Param() != subModule+"/extra@v1.2.0" {
+		t.Fatalf("added: %v", last)
+	}
+	if _, err := requestedPackages(OpAdd, subPkg, installed, requested); err == nil {
+		t.Fatal("adding an installed subdirectory path must fail")
+	}
+}
+
+func TestVerify_SubdirectoryPrefixBoundary(t *testing.T) {
+	e := newEnv(t)
+	// The module github.com/x/plugin must not satisfy github.com/x/plug/http.
+	e.builds.modules = map[string]string{subPkg: "github.com/x/plugin"}
+	op := e.run(t, OpAdd, subPkg)
+	assertVerifyFailed(t, e, op, subPkg)
+}
+
+func TestVerify_EmptyLiveConfig(t *testing.T) {
+	for _, cfg := range []string{"", "null", " null\n"} {
+		t.Run(fmt.Sprintf("%q", cfg), func(t *testing.T) {
+			e := newEnv(t)
+			e.m.LiveConfig = func(context.Context) ([]byte, error) { return []byte(cfg), nil }
+			if op := e.run(t, OpAdd, ratelimit); op.Step != StepDone {
+				t.Fatalf("op: %+v", op)
+			}
+		})
 	}
 }
