@@ -257,6 +257,26 @@ func (m *Manager) LastFinished(kind OpKind) (*Operation, bool) {
 	return nil, false
 }
 
+// LastFailed returns a copy of the most recently finished operation of any
+// kind (including a fallback) if it ended rolled back or failed; a later
+// successful operation clears it.
+func (m *Manager) LastFailed() (*Operation, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := len(m.order) - 1; i >= 0; i-- {
+		op, ok := m.ops[m.order[i]]
+		if !ok || op.FinishedAt.IsZero() {
+			continue
+		}
+		if op.Step == StepDone {
+			return nil, false
+		}
+		c := *op
+		return &c, true
+	}
+	return nil, false
+}
+
 // Catalog lists the plugins offered by the build service.
 func (m *Manager) Catalog(ctx context.Context) ([]Package, error) {
 	return m.Builds.Packages(ctx)

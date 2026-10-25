@@ -27,6 +27,7 @@ type PluginManager interface {
 	Get(id string) (*pluginmgr.Operation, bool)
 	Running() (*pluginmgr.Operation, bool)
 	LastFinished(kind pluginmgr.OpKind) (*pluginmgr.Operation, bool)
+	LastFailed() (*pluginmgr.Operation, bool)
 	UpdateAvailable(ctx context.Context) (managed, shipped string, available bool, err error)
 }
 
@@ -54,6 +55,9 @@ type pluginsResponse struct {
 	// LastUpdate is the most recent finished update, so a failed (auto-)update
 	// that no client polled still shows its error.
 	LastUpdate *pluginmgr.Operation `json:"lastUpdate,omitempty"`
+	// LastFailed is the most recent finished operation (or fallback to the
+	// shipped binary) if it failed, until a later operation succeeds.
+	LastFailed *pluginmgr.Operation `json:"lastFailed,omitempty"`
 }
 
 type catalogPlugin struct {
@@ -192,6 +196,9 @@ func (s Handler) GetPlugins() func(http.ResponseWriter, *http.Request) {
 		}
 		if op, ok := pm.LastFinished(pluginmgr.OpUpdate); ok {
 			resp.LastUpdate = op
+		}
+		if op, ok := pm.LastFailed(); ok {
+			resp.LastFailed = op
 		}
 		h.ResultResponseJSON(w, r, http.StatusOK, resp)
 	}

@@ -38,6 +38,7 @@ type stubPlugins struct {
 	running      *pluginmgr.Operation
 	ops          map[string]*pluginmgr.Operation
 	lastFinished map[pluginmgr.OpKind]*pluginmgr.Operation
+	lastFailed   *pluginmgr.Operation
 	started      []string // "kind pkg"
 	managed      string
 	shipped      string
@@ -74,6 +75,10 @@ func (s *stubPlugins) Running() (*pluginmgr.Operation, bool) {
 func (s *stubPlugins) LastFinished(kind pluginmgr.OpKind) (*pluginmgr.Operation, bool) {
 	op, ok := s.lastFinished[kind]
 	return op, ok
+}
+
+func (s *stubPlugins) LastFailed() (*pluginmgr.Operation, bool) {
+	return s.lastFailed, s.lastFailed != nil
 }
 
 func (s *stubPlugins) UpdateAvailable(context.Context) (string, string, bool, error) {
@@ -133,6 +138,7 @@ type pluginsView struct {
 	AutoUpdate     bool                  `json:"autoUpdate"`
 	Operation      *pluginmgr.Operation  `json:"operation"`
 	LastUpdate     *pluginmgr.Operation  `json:"lastUpdate"`
+	LastFailed     *pluginmgr.Operation  `json:"lastFailed"`
 }
 
 func getPlugins(t *testing.T, h Handler) pluginsView {
@@ -552,5 +558,18 @@ func TestGetPlugins_LastUpdate(t *testing.T) {
 	v = getPlugins(t, h)
 	if v.LastUpdate == nil || v.LastUpdate.Step != pluginmgr.StepDone || v.LastUpdate.Error != "" {
 		t.Errorf("done lastUpdate = %+v", v.LastUpdate)
+	}
+}
+
+func TestGetPlugins_LastFailed(t *testing.T) {
+	stub := newStubPlugins()
+	h := newPluginTestHandler(t, stub)
+	if v := getPlugins(t, h); v.LastFailed != nil {
+		t.Fatalf("lastFailed without a failure = %+v", v.LastFailed)
+	}
+	stub.lastFailed = &pluginmgr.Operation{ID: "op-fb", Kind: pluginmgr.OpFallback, Step: pluginmgr.StepFailed, Error: "exec format error"}
+	v := getPlugins(t, h)
+	if v.LastFailed == nil || v.LastFailed.ID != "op-fb" || v.LastFailed.Error != "exec format error" {
+		t.Fatalf("lastFailed = %+v", v.LastFailed)
 	}
 }

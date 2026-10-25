@@ -1,6 +1,7 @@
 package pluginmgr
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -78,4 +79,35 @@ func TestFallBackToShipped_NotWhileBusy(t *testing.T) {
 	}
 	close(e.restart.block)
 	waitOp(t, e.m, op.ID)
+}
+
+func TestLastFailed(t *testing.T) {
+	e := newEnv(t)
+	if op, ok := e.m.LastFailed(); ok {
+		t.Fatalf("LastFailed before any op = %+v", op)
+	}
+	e.rec.results = map[int][]error{1: {errors.New("boom")}}
+	rolled := e.run(t, OpAdd, ratelimit)
+	if rolled.Step != StepRolledBack {
+		t.Fatalf("add: %+v", rolled)
+	}
+	if got, ok := e.m.LastFailed(); !ok || got.ID != rolled.ID {
+		t.Fatalf("LastFailed = %+v %v, want the rolled-back add", got, ok)
+	}
+
+	// A later success of any kind clears it.
+	if op := e.run(t, OpAdd, ratelimit); op.Step != StepDone {
+		t.Fatalf("second add: %+v", op)
+	}
+	if got, ok := e.m.LastFailed(); ok {
+		t.Fatalf("LastFailed after a success = %+v", got)
+	}
+
+	// A fallback counts as a failure.
+	if !e.m.FallBackToShipped("exec format error") {
+		t.Fatal("expected a fallback")
+	}
+	if got, ok := e.m.LastFailed(); !ok || got.Kind != OpFallback {
+		t.Fatalf("LastFailed = %+v %v, want the fallback", got, ok)
+	}
 }
