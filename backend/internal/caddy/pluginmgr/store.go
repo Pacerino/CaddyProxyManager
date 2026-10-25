@@ -74,17 +74,16 @@ func (s *Store) Put(r io.Reader) (path, sha256hex string, err error) {
 	return dst, sum, nil
 }
 
-// resolve returns the target of the named symlink, if it exists and points at
-// an existing file.
+// resolve returns the binary the named symlink points at, as a path under Dir,
+// if it exists. Only the target's base name is used, so links written with
+// absolute targets and relative Dirs are handled alike.
 func (s *Store) resolve(name string) (string, bool) {
 	link := filepath.Join(s.Dir, name)
 	target, err := os.Readlink(link)
 	if err != nil {
 		return "", false
 	}
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(s.Dir, target)
-	}
+	target = filepath.Join(s.Dir, filepath.Base(target))
 	if _, err := os.Stat(target); err != nil {
 		return "", false
 	}
@@ -97,9 +96,12 @@ func (s *Store) Current() (string, bool) { return s.resolve(currentLink) }
 // Previous returns the binary the "previous" symlink points at.
 func (s *Store) Previous() (string, bool) { return s.resolve(previousLink) }
 
-// setLink atomically points the named symlink at target: it creates a temp
-// symlink in the same directory and renames it over the destination.
+// setLink atomically points the named symlink at the binary target: it creates
+// a temp symlink in the same directory and renames it over the destination.
+// The link target is the base name, so it resolves relative to the link's own
+// directory whatever Dir looks like.
 func (s *Store) setLink(name, target string) error {
+	target = filepath.Base(target)
 	var rnd [8]byte
 	if _, err := rand.Read(rnd[:]); err != nil {
 		return err
@@ -169,17 +171,17 @@ func (s *Store) Prune() error {
 	}
 	keep := map[string]bool{}
 	if p, ok := s.Current(); ok {
-		keep[p] = true
+		keep[filepath.Base(p)] = true
 	}
 	if p, ok := s.Previous(); ok {
-		keep[p] = true
+		keep[filepath.Base(p)] = true
 	}
 	for _, e := range entries {
 		name := e.Name()
 		full := filepath.Join(s.Dir, name)
 		switch {
 		case strings.HasPrefix(name, tmpPrefix):
-		case strings.HasPrefix(name, binPrefix) && !keep[full]:
+		case strings.HasPrefix(name, binPrefix) && !keep[name]:
 		default:
 			continue
 		}

@@ -116,3 +116,56 @@ func TestStore_Prune(t *testing.T) {
 		}
 	}
 }
+
+func TestStore_RelativeDir(t *testing.T) {
+	wd, _ := os.Getwd()
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+
+	s := NewStore("data")
+	a := put(t, s, "A")
+	if err := s.Promote(a); err != nil {
+		t.Fatal(err)
+	}
+	cur, ok := s.Current()
+	if !ok {
+		t.Fatal("current dangles with a relative data folder")
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir, "current")); err != nil {
+		t.Fatalf("current link does not resolve: %v", err)
+	}
+	if cur != a {
+		t.Fatalf("current = %q, want %q", cur, a)
+	}
+}
+
+func TestStore_PruneSpellingIndependent(t *testing.T) {
+	abs := t.TempDir()
+	wd, _ := os.Getwd()
+	if err := os.Chdir(filepath.Dir(abs)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+
+	absStore := &Store{Dir: abs}
+	a := put(t, absStore, "A")
+	b := put(t, absStore, "B")
+	// Links written with absolute targets.
+	if err := os.Symlink(a, filepath.Join(abs, "current")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(b, filepath.Join(abs, "previous")); err != nil {
+		t.Fatal(err)
+	}
+	rel := &Store{Dir: filepath.Base(abs)}
+	if err := rel.Prune(); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{a, b} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("%s was pruned: %v", p, err)
+		}
+	}
+}
