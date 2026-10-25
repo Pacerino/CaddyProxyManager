@@ -113,3 +113,27 @@ func TestSetupStatus_Switchable(t *testing.T) {
 		}
 	}
 }
+
+func TestDetectSetup_RemoteAdminAPI(t *testing.T) {
+	managed := managedBinary(t, 0o755)
+	for _, admin := range []string{"http://caddy:2019", "http://10.0.0.5:2019", "https://caddy.example.com"} {
+		for _, cfg := range []SetupConfig{
+			{Supervise: true, AdminURL: admin},
+			{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: managed, AdminURL: admin},
+		} {
+			st := DetectSetup(context.Background(), cfg, &fakeUnit{path: managed})
+			if st.State != SetupUnsupported || !strings.Contains(st.Reason, "CPM_CADDY_ADMINURL") {
+				t.Errorf("%s supervise=%v: %+v", admin, cfg.Supervise, st)
+			}
+		}
+	}
+}
+
+func TestDetectSetup_LocalAdminAPI(t *testing.T) {
+	for _, admin := range []string{"", "http://localhost:2019", "http://127.0.0.1:2019", "http://[::1]:2019", "http://LOCALHOST:2019"} {
+		st := DetectSetup(context.Background(), SetupConfig{Supervise: true, AdminURL: admin}, &fakeUnit{})
+		if st.State != SetupSupervised {
+			t.Errorf("%q: %+v", admin, st)
+		}
+	}
+}

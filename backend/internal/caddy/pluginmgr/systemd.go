@@ -3,6 +3,8 @@ package pluginmgr
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/dbus"
@@ -45,11 +47,40 @@ type SetupConfig struct {
 	ReloadStrategy string
 	Service        string
 	ManagedPath    string
+	// AdminURL is CPM_CADDY_ADMINURL; empty means the local default.
+	AdminURL string
+}
+
+// remoteAdminReason explains why plugins can't be installed for a Caddy whose
+// admin API is not on this machine.
+const remoteAdminReason = "Caddy's admin API is not local (CPM_CADDY_ADMINURL); plugins can only be installed for a Caddy that CPM runs"
+
+// isLocalAdmin reports whether the admin API URL points at this machine
+// (localhost or a loopback address).
+func isLocalAdmin(adminURL string) bool {
+	if adminURL == "" {
+		return true
+	}
+	u, err := url.Parse(adminURL)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // DetectSetup reports whether Caddy can be switched to the managed binary and,
 // when the systemd unit needs a change, the drop-in the user has to install.
 func DetectSetup(ctx context.Context, cfg SetupConfig, unit SystemdUnit) SetupStatus {
+	// CPM can only swap the binary of a Caddy it runs or restarts locally;
+	// a remote admin API belongs to some other Caddy.
+	if !isLocalAdmin(cfg.AdminURL) {
+		return SetupStatus{State: SetupUnsupported, Reason: remoteAdminReason}
+	}
 	if cfg.Supervise {
 		return SetupStatus{State: SetupSupervised}
 	}

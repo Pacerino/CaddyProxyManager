@@ -108,6 +108,7 @@ func detectSetup(ctx context.Context, mgr *pluginmgr.Manager) pluginmgr.SetupSta
 		ReloadStrategy: c.ReloadStrategy,
 		Service:        c.Service,
 		ManagedPath:    managedBinaryPath(),
+		AdminURL:       c.AdminURL,
 	}
 	st := pluginmgr.DetectSetup(ctx, cfg, pluginmgr.DBusUnit{})
 	if st.State != pluginmgr.SetupNeeded || !config.Configuration.PluginInstall {

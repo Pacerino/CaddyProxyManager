@@ -49,7 +49,7 @@ func TestEnsureSeeded_SystemdSetupFlow(t *testing.T) {
 	}
 
 	managed := filepath.Join(e.m.Store.Dir, "current")
-	cfg := SetupConfig{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: managed}
+	cfg := SetupConfig{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: managed, AdminURL: "http://localhost:2019"}
 	u := &fakeUnit{path: "/usr/bin/caddy", args: []string{"run", "--environ", "--config", "/etc/caddy/Caddyfile"}}
 	st := DetectSetup(context.Background(), cfg, u)
 	if st.State != SetupNeeded || st.DropIn == "" {
