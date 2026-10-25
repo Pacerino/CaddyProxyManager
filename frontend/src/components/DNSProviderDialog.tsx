@@ -109,17 +109,27 @@ export function DNSProviderDialog({
 
   const type = types.find((t) => t.moduleId === moduleId) ?? null;
   const secretsSet = provider && provider.moduleId === moduleId ? provider.secretsSet : [];
+  // The credential's module is not in this build (plugin removed): its values
+  // are edited as raw JSON and keep the original module ID.
+  const unavailable = provider !== null && !types.some((t) => t.moduleId === provider.moduleId);
+  const rawMode = unavailable || type?.source === "none";
+
+  // Stored secrets are not returned; list their keys blank so an unchanged
+  // secret is preserved by the backend.
+  const seedRaw = (stored: DNSProvider | null) => {
+    const raw: Record<string, unknown> = { ...(stored?.values ?? {}) };
+    for (const key of stored?.secretsSet ?? []) raw[key] = "";
+    setRawValues(JSON.stringify(raw, null, 2));
+  };
 
   // Seeds the values for a type, from the stored credential when it is of the
   // same type.
   const seed = (t: DNSProviderType | null, existing: DNSProvider | null) => {
     const stored = existing && t && existing.moduleId === t.moduleId ? existing : null;
-    if (t?.source === "none") {
-      // Stored secrets are not returned; list their keys blank so an
-      // unchanged secret is preserved by the backend.
-      const raw: Record<string, unknown> = { ...(stored?.values ?? {}) };
-      for (const key of stored?.secretsSet ?? []) raw[key] = "";
-      setRawValues(JSON.stringify(raw, null, 2));
+    if (existing && !t && !types.some((x) => x.moduleId === existing.moduleId)) {
+      seedRaw(existing);
+    } else if (t?.source === "none") {
+      seedRaw(stored);
     } else {
       setValues(seedValues(t?.fields ?? [], stored?.values ?? {}));
     }
@@ -146,9 +156,9 @@ export function DNSProviderDialog({
 
   const submit = () => {
     if (!name.trim()) return setError("A name is required");
-    if (!type) return setError("Choose a provider type");
+    if (!type && !unavailable) return setError("Choose a provider type");
     try {
-      if (type.source === "none") {
+      if (rawMode) {
         const parsed = JSON.parse(rawValues);
         if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
           return setError("Values must be a JSON object");
@@ -158,7 +168,7 @@ export function DNSProviderDialog({
       onSubmit({
         name: name.trim(),
         moduleId,
-        values: buildValues(type.fields, values, secretsSet),
+        values: buildValues(type!.fields, values, secretsSet),
       });
     } catch (e) {
       setError(e instanceof SyntaxError ? "Values must be valid JSON" : (e as Error).message);
@@ -189,21 +199,25 @@ export function DNSProviderDialog({
 
           <div className="space-y-2">
             <Label htmlFor="dns-type">Provider type</Label>
-            <select
-              id="dns-type"
-              className={selectClass}
-              value={moduleId}
-              onChange={(e) => changeType(e.target.value)}
-            >
-              {types.map((t) => (
-                <option key={t.moduleId} value={t.moduleId}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
+            {unavailable ? (
+              <Input id="dns-type" value={moduleId} readOnly />
+            ) : (
+              <select
+                id="dns-type"
+                className={selectClass}
+                value={moduleId}
+                onChange={(e) => changeType(e.target.value)}
+              >
+                {types.map((t) => (
+                  <option key={t.moduleId} value={t.moduleId}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {type?.source === "none" ? (
+          {rawMode ? (
             <div className="space-y-2">
               <Label htmlFor="dns-raw">Values (JSON)</Label>
               <textarea
@@ -214,7 +228,10 @@ export function DNSProviderDialog({
                 spellCheck={false}
               />
               <p className="text-xs text-muted-foreground">
-                No schema is known for this provider. Secrets already stored
+                {unavailable
+                  ? "This provider's module is not available in this Caddy build. "
+                  : "No schema is known for this provider. "}
+                Secrets already stored
                 are listed with an empty value and kept unless you change them.
               </p>
             </div>

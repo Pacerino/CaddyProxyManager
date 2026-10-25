@@ -105,4 +105,42 @@ describe("DNSProviderDialog", () => {
       values: { x: 1 },
     });
   });
+
+  it("edits a credential whose module is unavailable as raw JSON", () => {
+    const onSubmit = vi.fn();
+    const provider: DNSProvider = {
+      id: 7,
+      name: "Old",
+      moduleId: "dns.providers.removed",
+      values: { zone: "example.com" },
+      secretsSet: ["api_token"],
+      usedBy: [],
+      available: false,
+    };
+    render(
+      <DNSProviderDialog
+        open
+        onOpenChange={() => {}}
+        types={types}
+        provider={provider}
+        submitting={false}
+        onSubmit={onSubmit}
+      />
+    );
+    expect((screen.getByLabelText(/provider type/i) as HTMLInputElement).value).toBe(
+      "dns.providers.removed"
+    );
+    expect(screen.getByLabelText(/provider type/i)).toHaveAttribute("readonly");
+    const raw = screen.getByLabelText(/values \(json\)/i) as HTMLTextAreaElement;
+    expect(JSON.parse(raw.value)).toEqual({ zone: "example.com", api_token: "" });
+
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: "Renamed" } });
+    fireEvent.change(raw, { target: { value: '{"zone":"example.org","api_token":""}' } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: "Renamed",
+      moduleId: "dns.providers.removed",
+      values: { zone: "example.org", api_token: "" },
+    });
+  });
 });
