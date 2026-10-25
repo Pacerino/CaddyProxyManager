@@ -17,6 +17,7 @@ import type {
   ModuleConfig,
   PluginSchema,
 } from "@/lib/types";
+import { InstalledPluginsSection } from "@/components/InstalledPluginsSection";
 import { DNSProvidersSection } from "@/components/DNSProvidersSection";
 import {
   PluginDialog,
@@ -32,6 +33,8 @@ export function PluginsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selected, setSelected] = useState<CaddyModule | null>(null);
+  // Bumped when a plugin operation finishes so DNS provider types reload.
+  const [dnsVersion, setDnsVersion] = useState(0);
 
   const schemaByModule = useMemo(() => {
     const map = new Map<string, PluginSchema>();
@@ -124,7 +127,14 @@ export function PluginsPage() {
         </p>
       </div>
 
-      <DNSProvidersSection />
+      <InstalledPluginsSection
+        onChanged={() => {
+          load();
+          setDnsVersion((v) => v + 1);
+        }}
+      />
+
+      <DNSProvidersSection key={dnsVersion} />
 
       {unavailable && (
         <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">

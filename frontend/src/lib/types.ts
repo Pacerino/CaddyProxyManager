@@ -107,3 +107,63 @@ export interface DNSProvider {
   usedBy: DNSProviderHost[];
   available: boolean;
 }
+
+export type PluginOpKind = "add" | "remove" | "update";
+export type PluginOpStep =
+  | "requesting"
+  | "downloading"
+  | "verifying"
+  | "restarting"
+  | "reapplying"
+  | "done"
+  | "rolledBack"
+  | "failed";
+
+// A runtime plugin install/remove/update operation.
+export interface PluginOperation {
+  id: string;
+  kind: PluginOpKind;
+  package: string;
+  step: PluginOpStep;
+  error?: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
+export interface InstalledPlugin {
+  path: string;
+  version: string;
+  modules: string[];
+  tested: boolean;
+}
+
+export type PluginSetupState =
+  | "supervised"
+  | "systemd-ready"
+  | "setup-needed"
+  | "unsupported";
+
+export interface PluginsState {
+  installed: InstalledPlugin[];
+  installEnabled: boolean;
+  disabledReason?: string;
+  setup: { state: PluginSetupState; reason?: string; dropIn?: string };
+  update: { available: boolean; managed: string; shipped: string };
+  autoUpdate: boolean;
+  operation?: PluginOperation;
+  lastUpdate?: PluginOperation;
+}
+
+export interface CatalogPlugin {
+  path: string;
+  repo: string;
+  modules: string[];
+  tested: boolean;
+  installed: boolean;
+}
+
+export interface PluginUsage {
+  kind: string;
+  id: number;
+  name: string;
+}
