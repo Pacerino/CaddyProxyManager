@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -67,8 +68,105 @@ func (s Handler) GetCaddyConfig() func(http.ResponseWriter, *http.Request) {
 		if len(raw) == 0 {
 			raw = json.RawMessage("null")
 		}
-		h.ResultResponseJSON(w, r, http.StatusOK, raw)
+		redacted, err := redactDNSProviders(r.URL.Query().Get("path"), raw)
+		if err != nil {
+			h.ResultErrorJSON(w, r, http.StatusInternalServerError, err.Error(), nil)
+			return
+		}
+		h.ResultResponseJSON(w, r, http.StatusOK, redacted)
 	}
+}
+
+const redactedValue = "********"
+
+// redactDNSProviders masks the credentials of every DNS challenge provider in
+// a Caddy config (or config subtree read at path): all keys except the module
+// name are replaced. Everything else is returned untouched.
+func redactDNSProviders(path string, raw json.RawMessage) (json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber() // keep numbers exactly as Caddy sent them
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	changed := false
+	// Locate the requested subtree relative to the last "challenges" segment,
+	// so reads of the challenges, dns or provider object, or of a single
+	// provider value, are masked as well as whole-config reads.
+	segs := strings.FieldsFunc(path, func(r rune) bool { return r == '/' })
+	rest := []string(nil)
+	for i := len(segs) - 1; i >= 0; i-- {
+		if segs[i] == "challenges" {
+			rest = segs[i+1:]
+			break
+		}
+	}
+	switch {
+	case rest == nil:
+		changed = redactWalk(v)
+	case len(rest) == 0:
+		if m, ok := v.(map[string]any); ok {
+			if dns, ok := m["dns"].(map[string]any); ok {
+				changed = redactProvider(dns["provider"])
+			}
+		}
+	case len(rest) == 1 && rest[0] == "dns":
+		if m, ok := v.(map[string]any); ok {
+			changed = redactProvider(m["provider"])
+		}
+	case len(rest) == 2 && rest[0] == "dns" && rest[1] == "provider":
+		changed = redactProvider(v)
+	case len(rest) > 2 && rest[0] == "dns" && rest[1] == "provider":
+		// A single value inside the provider: only the module name is safe.
+		if rest[2] != "name" {
+			v, changed = redactedValue, true
+		}
+	default:
+		changed = redactWalk(v)
+	}
+	if !changed {
+		return raw, nil
+	}
+	return json.Marshal(v)
+}
+
+// redactWalk finds challenges.dns.provider objects anywhere under v.
+func redactWalk(v any) bool {
+	changed := false
+	switch t := v.(type) {
+	case map[string]any:
+		if ch, ok := t["challenges"].(map[string]any); ok {
+			if dns, ok := ch["dns"].(map[string]any); ok && redactProvider(dns["provider"]) {
+				changed = true
+			}
+		}
+		for _, child := range t {
+			if redactWalk(child) {
+				changed = true
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if redactWalk(child) {
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
+// redactProvider masks every key except "name" in a provider object.
+func redactProvider(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	for k := range m {
+		if k != "name" {
+			m[k] = redactedValue
+		}
+	}
+	return true
 }
 
 // GetCaddySchemas returns the global-scope typed configuration schemas.

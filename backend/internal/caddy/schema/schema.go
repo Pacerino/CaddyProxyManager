@@ -19,6 +19,10 @@ const (
 	FieldBool   FieldType = "bool"
 	// FieldSecret is a string that the UI should mask.
 	FieldSecret FieldType = "secret"
+	// FieldStringList is a list of strings (a JSON array of strings).
+	FieldStringList FieldType = "stringlist"
+	// FieldJSON is any JSON value, edited as raw JSON.
+	FieldJSON FieldType = "json"
 )
 
 // Scope describes where a plugin is configured.
@@ -191,6 +195,18 @@ func checkType(f Field, v any) string {
 		if _, ok := v.(bool); !ok {
 			return "must be a boolean"
 		}
+	case FieldStringList:
+		list, ok := v.([]any)
+		if !ok {
+			return "must be a list of strings"
+		}
+		for _, item := range list {
+			if _, ok := item.(string); !ok {
+				return "must be a list of strings"
+			}
+		}
+	case FieldJSON:
+		// Any JSON value is acceptable.
 	}
 	return ""
 }

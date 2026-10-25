@@ -46,7 +46,7 @@ func reloadSystemd() error {
 	resChan := make(chan string)
 	_, err = conn.ReloadOrRestartUnitContext(ctx, config.Configuration.Caddy.Service, "replace", resChan)
 	if err != nil {
-		logger.Error("CaddyReloadError", err)
+		logger.Warn("CaddyReloadError: %v", err)
 		return err
 	}
 	<-resChan
@@ -66,7 +66,7 @@ func reloadExec() error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		logger.Error("CaddyReloadError", err)
+		logger.Warn("CaddyReloadError: %v", err)
 		return err
 	}
 	return nil
@@ -91,7 +91,7 @@ func reloadAPI() error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		logger.Error("CaddyReloadError", err)
+		logger.Warn("CaddyReloadError: %v", err)
 		return err
 	}
 	defer resp.Body.Close()

@@ -4,16 +4,22 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Host struct {
 	gorm.Model
-	Domains   string `json:"domains" validate:"required,domains"`
-	Matcher   string `json:"matcher"`
-	Upstreams []Upstream
-	Plugins   []HostPlugin
+	Domains string `json:"domains" validate:"required,domains"`
+	Matcher string `json:"matcher"`
+	// DNSProviderID optionally references a DNSProvider used for the host's
+	// DNS-challenge certificates. Plain nullable column, no FK constraint;
+	// delete protection is enforced in the handler.
+	DNSProviderID *uint `json:"dnsProviderId"`
+	Upstreams     []Upstream
+	Plugins       []HostPlugin
 }
 
 // HostPlugin is a per-host plugin configuration. Handler holds the rendered
@@ -93,6 +99,22 @@ type ModuleConfig struct {
 	Enabled bool `json:"enabled" gorm:"default:true"`
 }
 
+// DNSProvider is a named set of DNS provider credentials that hosts can
+// reference. ModuleID is the dotted Caddy module name, e.g.
+// "dns.providers.cloudflare"; Config holds the provider's JSON configuration.
+type DNSProvider struct {
+	gorm.Model
+	Name     string `json:"name" gorm:"uniqueIndex" validate:"required"`
+	ModuleID string `json:"moduleId" validate:"required"`
+	Config   JSON   `json:"config"`
+}
+
+// ShortName returns the last dot-separated segment of a Caddy module ID,
+// e.g. "dns.providers.cloudflare" -> "cloudflare".
+func ShortName(moduleID string) string {
+	return moduleID[strings.LastIndex(moduleID, ".")+1:]
+}
+
 type User struct {
 	gorm.Model
 	Name   string `validate:"required"`
@@ -102,4 +124,26 @@ type User struct {
 	Provider string `json:"provider" gorm:"default:local"`
 	// Subject is the OIDC subject identifier (sub claim), empty for local users.
 	Subject string `json:"subject,omitempty" gorm:"index"`
+}
+
+// Setting is a key/value pair for settings changed at runtime from the UI.
+type Setting struct {
+	Key   string `gorm:"primaryKey"`
+	Value string
+}
+
+// GetSetting returns the value stored for key, or def when it is unset or
+// cannot be read.
+func GetSetting(db *gorm.DB, key, def string) string {
+	var s []Setting
+	// Find with Limit, unlike Take, doesn't log a missing key as an error.
+	if err := db.Where(&Setting{Key: key}).Limit(1).Find(&s).Error; err != nil || len(s) == 0 {
+		return def
+	}
+	return s[0].Value
+}
+
+// SetSetting stores value under key, replacing any previous value.
+func SetSetting(db *gorm.DB, key, value string) error {
+	return db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&Setting{Key: key, Value: value}).Error
 }

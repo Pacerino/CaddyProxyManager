@@ -15,7 +15,7 @@ func TestSetModuleConfigWithSchema(t *testing.T) {
 	startJobQueue(t)
 
 	body := map[string]any{
-		"moduleId": "dns.providers.cloudflare",
+		"moduleId": "test.global",
 		"values":   map[string]any{"api_token": "tok"},
 	}
 	rec := doRequest(h.SetModuleConfig(), http.MethodPut, "/caddy/module-configs", body, nil)
@@ -41,7 +41,7 @@ func TestSetModuleConfigSchemaValidationFails(t *testing.T) {
 	useAPIMode(t, srv.URL)
 
 	body := map[string]any{
-		"moduleId": "dns.providers.cloudflare",
+		"moduleId": "test.global",
 		"values":   map[string]any{}, // missing api_token
 	}
 	rec := doRequest(h.SetModuleConfig(), http.MethodPut, "/caddy/module-configs", body, nil)
@@ -94,7 +94,7 @@ func TestModuleConfigRequiresAPIMode(t *testing.T) {
 	t.Cleanup(func() { config.Configuration.Caddy.Mode = prev })
 
 	body := map[string]any{
-		"moduleId": "dns.providers.cloudflare",
+		"moduleId": "test.global",
 		"values":   map[string]any{"api_token": "tok"},
 	}
 	rec := doRequest(h.SetModuleConfig(), http.MethodPut, "/caddy/module-configs", body, nil)

@@ -81,12 +81,35 @@ jobs:
             suffix: ""
             plugins: ""
           # Caddy built with common DNS providers for ACME DNS-01 challenges.
+          # Each was verified to build against the pinned Caddy version.
           - flavor: dns
             suffix: "-dns"
             plugins: >-
               github.com/caddy-dns/cloudflare
               github.com/caddy-dns/duckdns
               github.com/caddy-dns/porkbun
+              github.com/caddy-dns/route53
+              github.com/caddy-dns/digitalocean
+              github.com/caddy-dns/hetzner
+              github.com/caddy-dns/ovh
+              github.com/caddy-dns/namecheap
+              github.com/caddy-dns/gandi
+              github.com/caddy-dns/desec
+              github.com/caddy-dns/netcup
+              github.com/caddy-dns/ionos
+              github.com/caddy-dns/linode
+              github.com/caddy-dns/godaddy
+              github.com/caddy-dns/rfc2136
+              github.com/caddy-dns/acmedns
+              github.com/caddy-dns/bunny
+              github.com/caddy-dns/inwx
+              github.com/caddy-dns/azure
+              github.com/caddy-dns/googleclouddns
+              github.com/caddy-dns/namesilo
+              github.com/caddy-dns/powerdns
+              github.com/caddy-dns/transip
+              github.com/caddy-dns/alidns
+              github.com/caddy-dns/he
     steps:
       - uses: actions/checkout@v4
 

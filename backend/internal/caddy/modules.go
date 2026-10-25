@@ -9,8 +9,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/Pacerino/CaddyProxyManager/internal/config"
 )
 
 // Module describes a single Caddy module (plugin) reported by
@@ -62,7 +60,7 @@ func runListModules(args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, config.Configuration.Caddy.Binary, append([]string{"list-modules"}, args...)...)
+	cmd := exec.CommandContext(ctx, ActiveBinary(), append([]string{"list-modules"}, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -71,7 +69,7 @@ func runListModules(args ...string) ([]byte, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return nil, fmt.Errorf("running %q list-modules: %s", config.Configuration.Caddy.Binary, msg)
+		return nil, fmt.Errorf("running %q list-modules: %s", ActiveBinary(), msg)
 	}
 	return out, nil
 }

@@ -35,7 +35,7 @@ func NewAPIProvider() *APIProvider {
 
 // WriteHost creates or updates the route for a host.
 func (p *APIProvider) WriteHost(h database.Host) error {
-	if err := p.ensureServer(); err != nil {
+	if err := p.EnsureServer(); err != nil {
 		return err
 	}
 
@@ -119,9 +119,9 @@ func (p *APIProvider) routeExists(id string) (bool, error) {
 	return p.configExists("/id/" + id)
 }
 
-// ensureServer makes sure the http app and target server exist so routes can
+// EnsureServer makes sure the http app and target server exist so routes can
 // be appended. It is a no-op when the server is already present.
-func (p *APIProvider) ensureServer() error {
+func (p *APIProvider) EnsureServer() error {
 	exists, err := p.configExists(fmt.Sprintf("/config/apps/http/servers/%s", p.serverName))
 	if err != nil {
 		return err

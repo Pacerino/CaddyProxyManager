@@ -1,0 +1,812 @@
+[
+  {
+    "module_name": "admin.api.load",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "admin.api.metrics",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "admin.api.pki",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "admin.api.reverse_proxy",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.adapters.caddyfile",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.config_loaders.http",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.filesystems",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.listeners.http_redirect",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.listeners.proxy_protocol",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.listeners.tls",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.cores.mock",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.append",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.console",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.cookie",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.delete",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.hash",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.ip_mask",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.multi_regexp",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.query",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.regexp",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.rename",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.filter.replace",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.journald",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.encoders.json",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.writers.discard",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.writers.file",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.writers.net",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.writers.stderr",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.logging.writers.stdout",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.network_proxy.none",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.network_proxy.url",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "caddy.storage.file_system",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "events",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.authentication.hashes.argon2id",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.authentication.hashes.bcrypt",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.authentication.providers.http_basic",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.encoders.gzip",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.encoders.zstd",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.acme_server",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.authentication",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.copy_response",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.copy_response_headers",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.encode",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.error",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.file_server",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.headers",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.intercept",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.invoke",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.log_append",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.map",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.metrics",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.push",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.request_body",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.reverse_proxy",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.rewrite",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.static_response",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.subroute",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.templates",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.tracing",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.handlers.vars",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.ip_sources.static",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.client_ip",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.expression",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.file",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.header",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.header_regexp",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.host",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.method",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.not",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.path",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.path_regexp",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.protocol",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.query",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.remote_ip",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.tls",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.vars",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.matchers.vars_regexp",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.precompressed.br",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.precompressed.gzip",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.precompressed.zstd",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.client_ip_hash",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.cookie",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.first",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.header",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.ip_hash",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.least_conn",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.query",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.random",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.random_choose",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.round_robin",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.uri_hash",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.selection_policies.weighted_round_robin",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.transport.fastcgi",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.transport.http",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.upstreams.a",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.upstreams.multi",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "http.reverse_proxy.upstreams.srv",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "pki",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.combined",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.file",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.http",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.inline",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.pki_intermediate",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.pki_root",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.storage",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ca_pool.source.system",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.certificates.automate",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.certificates.load_files",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.certificates.load_folders",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.certificates.load_pem",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.certificates.load_storage",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.client_auth.verifier.leaf",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.ech.publishers.dns",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.get_certificate.http",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.get_certificate.tailscale",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.handshake_match.local_ip",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.handshake_match.remote_ip",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.handshake_match.sni",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.handshake_match.sni_regexp",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.issuance.acme",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.issuance.internal",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.issuance.zerossl",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.leaf_cert_loader.file",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.leaf_cert_loader.folder",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.leaf_cert_loader.pem",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.leaf_cert_loader.storage",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.permission.http",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.stek.distributed",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "tls.stek.standard",
+    "module_type": "standard",
+    "version": "v2.11.4",
+    "package_url": "github.com/caddyserver/caddy/v2"
+  },
+  {
+    "module_name": "dns.providers.cloudflare",
+    "module_type": "non-standard",
+    "version": "v0.2.4",
+    "package_url": "github.com/caddy-dns/cloudflare"
+  },
+  {
+    "module_name": "dns.providers.duckdns",
+    "module_type": "non-standard",
+    "version": "v0.5.0",
+    "package_url": "github.com/caddy-dns/duckdns"
+  },
+  {
+    "module_name": "dns.providers.porkbun",
+    "module_type": "non-standard",
+    "version": "v0.3.1",
+    "package_url": "github.com/caddy-dns/porkbun"
+  }
+]

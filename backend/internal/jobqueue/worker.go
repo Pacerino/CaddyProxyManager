@@ -1,8 +1,6 @@
 package jobqueue
 
 import (
-	"fmt"
-
 	"github.com/Pacerino/CaddyProxyManager/internal/logger"
 )
 
@@ -29,7 +27,7 @@ func (w *Worker) doWork() bool {
 		case job := <-w.Queue.jobs:
 			err := job.Run()
 			if err != nil {
-				logger.Error(fmt.Sprintf("%sError", job.Name), err)
+				logger.Warn("%sError: %v", job.Name, err)
 				continue
 			}
 		}

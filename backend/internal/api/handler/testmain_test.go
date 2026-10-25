@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
+	"github.com/Pacerino/CaddyProxyManager/internal/caddy/schema"
 	"github.com/Pacerino/CaddyProxyManager/internal/config"
 	"github.com/Pacerino/CaddyProxyManager/internal/database"
 	"github.com/Pacerino/CaddyProxyManager/internal/jobqueue"
@@ -16,6 +19,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )
+
+func init() {
+	// A global-scope schema fixture for the module-config tests.
+	schema.Register(&schema.Schema{
+		ModuleID: "test.global",
+		Title:    "Test global",
+		Scopes:   []schema.Scope{schema.ScopeGlobal},
+		Path:     "apps/tls/automation/policies",
+		Fields:   []schema.Field{{Key: "api_token", Label: "API Token", Type: schema.FieldSecret, Required: true}},
+	})
+}
 
 // newTestHandler returns a Handler backed by a fresh in-memory SQLite database
 // with the schema migrated. Each test gets an isolated database (private
@@ -32,28 +46,122 @@ func newTestHandler(t *testing.T) Handler {
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	if err := db.AutoMigrate(&database.Host{}, &database.Upstream{}, &database.HostPlugin{}, &database.User{}, &database.ModuleConfig{}); err != nil {
+	if err := db.AutoMigrate(&database.Host{}, &database.Upstream{}, &database.HostPlugin{}, &database.User{}, &database.ModuleConfig{}, &database.DNSProvider{}, &database.Setting{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return Handler{DB: db}
 }
 
+const (
+	fakeTLSPath      = "/config/apps/tls"
+	fakeAutoPath     = "/config/apps/tls/automation"
+	fakePoliciesPath = "/config/apps/tls/automation/policies"
+)
+
+// fakeCaddy is the state behind fakeCaddyServer. It models Caddy v2.11.7's
+// admin API for the TLS policies array: a GET whose last path segment is
+// missing answers 200 "null", one under a missing intermediate segment answers
+// 400; PUT creates (the parent must exist) and PATCH replaces. Every other
+// GET answers "null" and every other method 200.
+type fakeCaddy struct {
+	mu       sync.Mutex
+	tls      bool
+	auto     bool
+	policies []any
+}
+
+// Policies returns a copy of the stored TLS policies array (nil when absent).
+func (f *fakeCaddy) Policies() []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []map[string]any
+	for _, p := range f.policies {
+		m, _ := p.(map[string]any)
+		out = append(out, m)
+	}
+	return out
+}
+
+func (f *fakeCaddy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	reply := func(status int, out string) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(out))
+	}
+	path := r.URL.Path
+	body, _ := io.ReadAll(r.Body)
+
+	switch r.Method {
+	case http.MethodGet:
+		switch path {
+		case fakeTLSPath:
+			if f.tls {
+				reply(http.StatusOK, "{}")
+				return
+			}
+		case fakeAutoPath:
+			if !f.tls {
+				reply(http.StatusBadRequest, `{"error":"invalid traversal path at: apps/tls"}`)
+				return
+			}
+			if f.auto {
+				reply(http.StatusOK, "{}")
+				return
+			}
+		case fakePoliciesPath:
+			if !f.auto {
+				reply(http.StatusBadRequest, `{"error":"invalid traversal path at: apps/tls/automation"}`)
+				return
+			}
+			if f.policies != nil {
+				b, _ := json.Marshal(f.policies)
+				reply(http.StatusOK, string(b))
+				return
+			}
+		}
+		reply(http.StatusOK, "null")
+	case http.MethodPut, http.MethodPatch:
+		switch path {
+		case fakeTLSPath:
+			var v struct {
+				Automation struct {
+					Policies []any `json:"policies"`
+				} `json:"automation"`
+			}
+			_ = json.Unmarshal(body, &v)
+			f.tls, f.auto, f.policies = true, true, v.Automation.Policies
+		case fakeAutoPath:
+			var v struct {
+				Policies []any `json:"policies"`
+			}
+			_ = json.Unmarshal(body, &v)
+			f.auto, f.policies = true, v.Policies
+		case fakePoliciesPath:
+			var v []any
+			_ = json.Unmarshal(body, &v)
+			f.policies = v
+		}
+		reply(http.StatusOK, "")
+	default:
+		reply(http.StatusOK, "")
+	}
+}
+
 // fakeCaddyServer starts an httptest server that accepts the admin API calls
 // the APIProvider makes, so WriteHost/Apply succeed without a real Caddy.
 func fakeCaddyServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// GET traversal endpoints return "null" (absent) so the provider
-		// bootstraps; everything else returns 200.
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("null"))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
+	srv, _ := fakeCaddyWithState(t)
 	return srv
+}
+
+// fakeCaddyWithState is fakeCaddyServer plus access to the stored TLS policies.
+func fakeCaddyWithState(t *testing.T) (*httptest.Server, *fakeCaddy) {
+	t.Helper()
+	f := &fakeCaddy{}
+	srv := httptest.NewServer(f)
+	t.Cleanup(srv.Close)
+	return srv, f
 }
 
 // useAPIMode points the global config at the fake Caddy and uses API mode with

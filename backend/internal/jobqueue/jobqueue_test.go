@@ -84,3 +84,21 @@ func TestJobRun(t *testing.T) {
 		t.Error("expected error from Run")
 	}
 }
+
+func TestFailingJobDoesNotStopWorker(t *testing.T) {
+	Start()
+	defer func() { _ = Shutdown() }()
+
+	if err := AddJob(Job{Name: "failing", Action: func() error { return errors.New("boom") }}); err != nil {
+		t.Fatalf("AddJob: %v", err)
+	}
+	done := make(chan struct{})
+	if err := AddJob(Job{Name: "after", Action: func() error { close(done); return nil }}); err != nil {
+		t.Fatalf("AddJob: %v", err)
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job after a failing job did not run")
+	}
+}

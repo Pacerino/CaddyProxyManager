@@ -1,0 +1,88 @@
+{
+  "definitions": {
+    "dns.providers.cloudflare": {
+      "description": "cloudflare: object\nModule: dns.providers.cloudflare\nhttps://pkg.go.dev/github.com/caddy-dns/cloudflare#Provider\nProvider wraps the provider implementation as a Caddy module.\n\n",
+      "markdownDescription": "cloudflare: `object`  \nModule: `dns.providers.cloudflare`  \n[godoc](https://pkg.go.dev/github.com/caddy-dns/cloudflare#Provider)  \nProvider wraps the provider implementation as a Caddy module.\n  \n",
+      "type": "object",
+      "properties": {
+        "api_token": {
+          "description": "api_token: string\nModule: dns.providers.cloudflare\nAPI token is used for authentication. Make sure to use a\nscoped API **token**, NOT a global API **key**. It will\nneed two permissions: Zone-Zone-Read and Zone-DNS-Edit,\nunless you are only using `GetRecords()`, in which case\nthe second can be changed to Read.\n",
+          "markdownDescription": "api_token: `string`  \nModule: `dns.providers.cloudflare`  \nAPI token is used for authentication. Make sure to use a\nscoped API **token**, NOT a global API **key**. It will\nneed two permissions: Zone-Zone-Read and Zone-DNS-Edit,\nunless you are only using `GetRecords()`, in which case\nthe second can be changed to Read.  \n",
+          "type": "string"
+        },
+        "zone_token": {
+          "description": "zone_token: string\nModule: dns.providers.cloudflare\nhttps://pkg.go.dev/github.com/caddy-dns/cloudflare#Provider",
+          "markdownDescription": "zone_token: `string`  \nModule: `dns.providers.cloudflare`  \n[godoc](https://pkg.go.dev/github.com/caddy-dns/cloudflare#Provider)",
+          "type": "string"
+        }
+      }
+    },
+    "dns.providers.duckdns": {
+      "description": "duckdns: object\nModule: dns.providers.duckdns\nhttps://pkg.go.dev/github.com/caddy-dns/duckdns#Provider\nProvider wraps the provider implementation as a Caddy module.\n\n",
+      "markdownDescription": "duckdns: `object`  \nModule: `dns.providers.duckdns`  \n[godoc](https://pkg.go.dev/github.com/caddy-dns/duckdns#Provider)  \nProvider wraps the provider implementation as a Caddy module.\n  \n",
+      "type": "object",
+      "properties": {
+        "api_token": {
+          "description": "api_token: string\nModule: dns.providers.duckdns\n",
+          "markdownDescription": "api_token: `string`  \nModule: `dns.providers.duckdns`  \n",
+          "type": "string"
+        },
+        "override_domain": {
+          "description": "override_domain: string\nModule: dns.providers.duckdns\n",
+          "markdownDescription": "override_domain: `string`  \nModule: `dns.providers.duckdns`  \n",
+          "type": "string"
+        },
+        "resolver": {
+          "description": "resolver: string\nModule: dns.providers.duckdns\nhttps://pkg.go.dev/github.com/caddy-dns/duckdns#Provider",
+          "markdownDescription": "resolver: `string`  \nModule: `dns.providers.duckdns`  \n[godoc](https://pkg.go.dev/github.com/caddy-dns/duckdns#Provider)",
+          "type": "string"
+        }
+      }
+    },
+    "dns.providers.porkbun": {
+      "description": "porkbun: object\nModule: dns.providers.porkbun\nhttps://pkg.go.dev/github.com/caddy-dns/porkbun#Provider\nProvider lets Caddy read and manipulate DNS records hosted by this DNS provider.\n\n",
+      "markdownDescription": "porkbun: `object`  \nModule: `dns.providers.porkbun`  \n[godoc](https://pkg.go.dev/github.com/caddy-dns/porkbun#Provider)  \nProvider lets Caddy read and manipulate DNS records hosted by this DNS provider.\n  \n",
+      "type": "object",
+      "properties": {
+        "api_key": {
+          "description": "api_key: string\nModule: dns.providers.porkbun\n",
+          "markdownDescription": "api_key: `string`  \nModule: `dns.providers.porkbun`  \n",
+          "type": "string"
+        },
+        "api_secret_key": {
+          "description": "api_secret_key: string\nModule: dns.providers.porkbun\n",
+          "markdownDescription": "api_secret_key: `string`  \nModule: `dns.providers.porkbun`  \n",
+          "type": "string"
+        }
+      }
+    },
+    "dns.providers.fixture": {
+      "description": "fixture: object\nModule: dns.providers.fixture\nHand-written provider covering every type mapping.\n",
+      "type": "object",
+      "properties": {
+        "ttl": {
+          "description": "ttl: number\nModule: dns.providers.fixture\nRecord TTL.\n",
+          "type": "number"
+        },
+        "debug": {
+          "type": "boolean"
+        },
+        "region": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zones": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extra": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

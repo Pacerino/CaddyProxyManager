@@ -56,7 +56,7 @@ Images are published for `linux/amd64` and `linux/arm64` in two flavors:
 | Tag | Contents |
 | --- | --- |
 | `latest`, `<version>`, `<major>.<minor>` | Newest stable release with the stock Caddy build. |
-| `latest-dns`, `<version>-dns`, … | Same, with Caddy built with the [`cloudflare`](https://github.com/caddy-dns/cloudflare), [`duckdns`](https://github.com/caddy-dns/duckdns) and [`porkbun`](https://github.com/caddy-dns/porkbun) DNS providers for ACME DNS-01 challenges. |
+| `latest-dns`, `<version>-dns`, … | Same, with Caddy built with 25 DNS providers for ACME DNS-01 challenges (see [DNS providers](#-dns-providers)). |
 
 > [!NOTE]
 > Images are only published for version tags. Pre-releases (e.g. `v3.2.0-rc1`) get their exact version tag but never move `latest`.
@@ -90,7 +90,10 @@ All settings are environment variables prefixed with `CPM_`.
 | `CPM_CADDY_RELOADSTRATEGY` | `systemd` | Reload strategy (Caddyfile mode): `systemd`, `exec`, `api` or `none`. |
 | `CPM_CADDY_BINARY` | `caddy` | Caddy executable for the `exec` reload strategy. |
 | `CPM_CADDY_SERVICE` | `caddy.service` | systemd unit for the `systemd` reload strategy. |
+| `CPM_CADDY_SUPERVISE` | `false` (`true` in the Docker image) | CPM starts and supervises the Caddy process itself (API mode); required for installing plugins in Docker. |
+| `CPM_CADDY_CONFIGFILE` | `<CPM_DATAFOLDER>/caddy.json` | JSON config the supervised Caddy starts with. |
 | `CPM_CADDYFILE` | `/etc/caddy/Caddyfile` | Main Caddyfile (used by `exec`/`api` reload). |
+| `CPM_CADDY_SCHEMAFILE` | `/usr/share/cpm/caddy_schema.json` | Caddy JSON schema used to describe DNS provider fields (API mode). |
 
 ### Authentication
 
@@ -110,6 +113,7 @@ All settings are environment variables prefixed with `CPM_`.
 | --- | --- | --- |
 | `CPM_DATAFOLDER` | `/etc/caddy/` | Data + per-host config folder. |
 | `CPM_LOGFOLDER` | `/var/log/caddy` | Per-host log folder. |
+| `CPM_PLUGIN_INSTALL` | `true` | Allow installing and removing Caddy plugins from the UI. Set to `false` to make the installed list read-only. |
 | `CPM_FRONTENDDIR` | — | Serve the frontend from this directory instead of the embedded assets. |
 | `CPM_ADMIN_EMAIL` | `admin@example.com` | Seed admin email (first run, local mode). |
 | `CPM_ADMIN_PASSWORD` | `changeme` | Seed admin password (first run, local mode). |
@@ -157,16 +161,16 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on GitHub-hoste
 docker build -t caddyproxymanager .
 ```
 
-The multi-stage build compiles the frontend and backend (a pure-Go build, no C toolchain required) into a small Alpine runtime that bundles Caddy.
+The multi-stage build compiles the frontend and backend (a pure-Go build, no C toolchain required) into a small Alpine runtime that bundles Caddy. Caddy is always built with [`xcaddy`](https://github.com/caddyserver/xcaddy), including [`caddy-json-schema`](https://github.com/abiosoft/caddy-json-schema), and the image ships the generated schema at `/usr/share/cpm/caddy_schema.json`. The build needs internet access (the schema generation fetches the Caddy docs).
 
-To bundle Caddy plugins, pass their Go module paths (optionally pinned with `@version`) and the image builds Caddy with [`xcaddy`](https://github.com/caddyserver/xcaddy) instead of downloading the stock release:
+To bundle Caddy plugins, pass their Go module paths (optionally pinned with `@version`) and they are added to the xcaddy build on top of `caddy-json-schema`:
 
 ```bash
 docker build -t caddyproxymanager:custom \
   --build-arg CADDY_PLUGINS="github.com/caddy-dns/cloudflare github.com/mholt/caddy-ratelimit" .
 ```
 
-`CADDY_VERSION` (default `2.11.4`) selects the Caddy release in both cases.
+`CADDY_VERSION` (default `2.11.4`) selects the Caddy release.
 
 ## ❓ FAQ
 
@@ -185,13 +189,91 @@ Yes. Set `CPM_AUTH_MODE=oidc` and configure the `CPM_AUTH_OIDC_*` variables. On 
 <details>
 <summary><strong>Does CPM run Caddy for me?</strong></summary>
 
-The Docker image does — its entrypoint launches Caddy with the admin API and then CPM. For bare-metal installs, run Caddy yourself and point CPM at it (`CPM_CADDYFILE` / `CPM_CADDY_ADMINURL`) with the appropriate reload strategy.
+The Docker image does — CPM starts and supervises Caddy itself (restarting it if it crashes) and keeps its data in `/data`. For bare-metal installs, run Caddy yourself and point CPM at it (`CPM_CADDYFILE` / `CPM_CADDY_ADMINURL`) with the appropriate reload strategy.
 </details>
+
+## 🔐 DNS providers
+
+CPM can obtain certificates through ACME DNS-01 challenges, e.g. for wildcard domains or hosts that are not reachable from the internet.
+
+1. Open the **Plugins** page and save credentials for a DNS provider (Cloudflare, DuckDNS, Porkbun, or any other DNS module built into your Caddy).
+2. Pick one of the saved providers when creating or editing a host.
+
+Use Caddy `{env.VAR}` placeholders for secrets (e.g. `api_token = {env.DUCKDNS_TOKEN}`) and pass the variable to the container (`-e DUCKDNS_TOKEN=...`). The placeholder is stored in the database, not the secret itself, and API responses never contain secret values.
+
+The `-dns` image flavor bundles these providers: [`cloudflare`](https://github.com/caddy-dns/cloudflare), [`duckdns`](https://github.com/caddy-dns/duckdns), [`porkbun`](https://github.com/caddy-dns/porkbun), [`route53`](https://github.com/caddy-dns/route53), [`digitalocean`](https://github.com/caddy-dns/digitalocean), [`hetzner`](https://github.com/caddy-dns/hetzner), [`ovh`](https://github.com/caddy-dns/ovh), [`namecheap`](https://github.com/caddy-dns/namecheap), [`gandi`](https://github.com/caddy-dns/gandi), [`desec`](https://github.com/caddy-dns/desec), [`netcup`](https://github.com/caddy-dns/netcup), [`ionos`](https://github.com/caddy-dns/ionos), [`linode`](https://github.com/caddy-dns/linode), [`godaddy`](https://github.com/caddy-dns/godaddy), [`rfc2136`](https://github.com/caddy-dns/rfc2136), [`acmedns`](https://github.com/caddy-dns/acmedns), [`bunny`](https://github.com/caddy-dns/bunny), [`inwx`](https://github.com/caddy-dns/inwx), [`azure`](https://github.com/caddy-dns/azure), [`googleclouddns`](https://github.com/caddy-dns/googleclouddns), [`namesilo`](https://github.com/caddy-dns/namesilo), [`powerdns`](https://github.com/caddy-dns/powerdns), [`transip`](https://github.com/caddy-dns/transip), [`alidns`](https://github.com/caddy-dns/alidns), [`he`](https://github.com/caddy-dns/he). For other providers, build your own image with `CADDY_PLUGINS` (see [Building the image yourself](#-building-the-image-yourself)).
+
+> [!NOTE]
+> Hosts using a DNS provider get a dedicated TLS policy that uses Let's Encrypt only; there is no ZeroSSL fallback for DNS-challenge hosts.
+
+## 🧩 Installing plugins
+
+On the **Plugins** page you can add or remove Caddy plugins without rebuilding the image. CPM asks the [Caddy download service](https://caddyserver.com/download) for a build containing the plugin, swaps Caddy over to it and rolls back automatically if Caddy does not come up healthy.
+
+- **Any registered plugin works.** Search the catalog by package path or module name (e.g. `ratelimit` finds `github.com/mholt/caddy-ratelimit`) and pick a plugin from the results. Plugins from the tested list (the ones bundled in the `-dns` image) are marked as tested; everything else is marked untested, so use it at your own risk.
+- **Caddy version.** Caddy's build service always builds the latest Caddy release, so installing or removing a plugin also updates Caddy if the image ships an older one (CPM never downgrades).
+- **Restart note.** Switching binaries restarts Caddy, so there is a short interruption while the new build starts. Existing plugins stay pinned to their installed version; the new one is added at its latest version.
+- **Rollback.** CPM keeps the previous binary. If the new build fails to start, or applying your hosts to it reports errors, CPM switches back automatically and shows the error.
+- **Updates.** When the image ships a newer Caddy than the managed binary runs (e.g. after pulling a new CPM image), the Plugins page shows an update banner and offers to rebuild your plugins on that Caddy version (the same safe switch with rollback). Turn on *Update automatically* to do this at startup. A failed update is reported on the page.
+- **Failures stay visible.** A failed or rolled-back change, or CPM switching back to the shipped Caddy because the managed binary could not start, is shown on the Plugins page until a later change succeeds.
+- **Disabling.** Set `CPM_PLUGIN_INSTALL=false` to turn installing off; the installed list stays visible but read-only.
+- **Internet access** is required to download builds. For offline setups use the `-dns` image flavor (or build your own with `CADDY_PLUGINS`) and keep plugin install disabled.
+- **Requirements.** API mode (`CPM_CADDY_MODE=api`) is required. The Docker image works out of the box because CPM supervises Caddy itself (`CPM_CADDY_SUPERVISE=true`); Caddy's certificates and autosave are stored in the `/data` volume. Managed binaries live in `<CPM_DATAFOLDER>/caddy-bin/`. CPM can only change a Caddy it runs or restarts on the same machine: with `CPM_CADDY_ADMINURL` pointing at another host or container, plugin install is disabled and the Plugins page says why.
+
+### systemd setup
+
+Without Docker, Caddy runs under systemd and CPM can only restart the service, so the unit must start CPM's managed binary. CPM never touches the system binary (e.g. `/usr/bin/caddy`): when plugin install is enabled (`CPM_PLUGIN_INSTALL`, the default), CPM copies the configured Caddy on start (`CPM_CADDY_BINARY`) into `<CPM_DATAFOLDER>/caddy-bin/` and makes that copy the managed binary (`caddy-bin/current`), so the unit keeps running the same Caddy after the switch. The copy is kept as the *seed*: whenever CPM has to fall back, it points `current` at the seed again instead of removing it.
+
+The Plugins page then shows the exact drop-in to install; it looks like this (adjust the path to your `CPM_DATAFOLDER`, keep your original arguments):
+
+```ini
+# systemctl edit caddy.service
+[Service]
+ExecStart=
+ExecStart=/etc/caddy/caddy-bin/current run --environ --config /etc/caddy/Caddyfile
+```
+
+Then run `systemctl daemon-reload && systemctl restart caddy`. The service user must be able to read the managed binary and CPM needs permission to restart the unit. Run CPM with `CPM_CADDY_RELOADSTRATEGY=systemd` (the default).
+
+When your distribution updates its Caddy package, the managed binary stays on the copied version; the Plugins page then offers the update to the newer Caddy.
+
+### Going back to the shipped Caddy
+
+- **Docker:** remove the managed binary link and restart the container; CPM then runs the Caddy that ships with the image:
+
+  ```bash
+  docker exec cpm rm /data/caddy-bin/current
+  docker restart cpm
+  ```
+
+  CPM also does this by itself when the managed binary cannot start (for example after moving `/data` to a machine with another CPU architecture).
+- **systemd:** point `current` back at the seed (the copy of your original Caddy) and restart the service:
+
+  ```bash
+  cd <CPM_DATAFOLDER>/caddy-bin && ln -sfn "$(readlink seed)" current && rm -f previous
+  systemctl restart caddy
+  ```
+
+  To leave plugin management entirely, remove the drop-in (`systemctl revert caddy.service`) and restart Caddy.
+
+## ⬆️ Upgrading
+
+Images with plugin install keep Caddy's data under `/data`: `XDG_DATA_HOME=/data/.local/share` and `XDG_CONFIG_HOME=/data/.config`. Older images stored certificates under `/root/.local/share/caddy` (lost on container re-creation unless you mounted it) and the autosave under `/root/.config/caddy`. If you mounted either path, copy its contents into the data volume once, then drop the old mounts:
+
+```bash
+docker run --rm -v <old-certs-volume>:/old-data -v <old-config-volume>:/old-config -v cpm-data:/data alpine \
+  sh -c 'mkdir -p /data/.local/share/caddy /data/.config/caddy && cp -a /old-data/. /data/.local/share/caddy/ && cp -a /old-config/. /data/.config/caddy/'
+```
+
+Leave out the `/old-config` parts if you only mounted the certificates. Without the migration Caddy simply obtains new certificates (mind the Let's Encrypt rate limits for many domains).
+
+## ⚠️ Limitations
+
+- Plugins and DNS providers require `CPM_CADDY_MODE=api`. In Caddyfile mode the plugin and DNS provider endpoints return `400`, and creating or updating a host with a DNS provider is rejected with `400` ("DNS providers are only available when CPM_CADDY_MODE=api"). Provider choices saved earlier in API mode are kept but ignored, and the Hosts page flags them.
 
 ## 🗺️ Roadmap
 
 - [ ] Log viewer
-- [ ] Plugin management
 - [ ] Per-host advanced directives
 
 ## 🙌 Acknowledgements

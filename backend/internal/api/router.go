@@ -15,7 +15,8 @@ import (
 	"github.com/go-chi/cors"
 )
 
-func NewRouter() http.Handler {
+// NewRouter builds the API router around h.
+func NewRouter(h *handler.Handler) http.Handler {
 	cors := cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -25,7 +26,6 @@ func NewRouter() http.Handler {
 	})
 
 	r := chi.NewRouter()
-	h := handler.NewHandler()
 
 	r.Use(
 		cors,
@@ -58,10 +58,29 @@ func generateRoutes(r chi.Router, h *handler.Handler) chi.Router {
 			r.Get("/host-schemas", h.GetHostScopedSchemas()) // Host-scope config schemas
 			r.Get("/config", h.GetCaddyConfig())             // Read live caddy config (api mode)
 
+			r.Get("/dns-provider-types", h.GetDNSProviderTypes()) // DNS provider modules with their config fields
+
+			r.Route("/dns-providers", func(r chi.Router) {
+				r.Get("/", h.GetDNSProviders())                 // List stored DNS provider credentials
+				r.Post("/", h.CreateDNSProvider())              // Create a credential
+				r.Put("/{id:[0-9]+}", h.UpdateDNSProvider())    // Update a credential
+				r.Delete("/{id:[0-9]+}", h.DeleteDNSProvider()) // Delete a credential
+			})
+
 			r.Route("/module-configs", func(r chi.Router) {
 				r.Get("/", h.GetModuleConfigs())                 // List stored module configs
 				r.Put("/", h.SetModuleConfig())                  // Create/update + apply a module config
 				r.Delete("/{id:[0-9]+}", h.DeleteModuleConfig()) // Delete a module config
+			})
+
+			r.Route("/plugins", func(r chi.Router) {
+				r.Get("/", h.GetPlugins())                        // Installed plugins, install and update state
+				r.Get("/catalog", h.GetPluginCatalog())           // Search the build service's plugins
+				r.Post("/", h.AddPlugin())                        // Start installing a plugin
+				r.Delete("/", h.RemovePlugin())                   // Start removing a plugin (?path=)
+				r.Post("/update", h.UpdatePlugins())              // Rebuild on the shipped Caddy version
+				r.Get("/operations/{id}", h.GetPluginOperation()) // Status of a plugin operation
+				r.Put("/settings", h.SetPluginSettings())         // Store the plugin settings
 			})
 		})
 
