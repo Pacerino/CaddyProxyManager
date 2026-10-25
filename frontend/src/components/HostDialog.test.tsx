@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { HostDialog } from "./HostDialog";
-import type { DNSProvider } from "@/lib/types";
+import type { DNSProvider, Host } from "@/lib/types";
 
 const providers: DNSProvider[] = [
   {
@@ -95,6 +95,34 @@ describe("HostDialog", () => {
       />
     );
     expect(screen.queryByLabelText(/dns provider/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the stored DNS provider when the select is hidden", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <HostDialog
+        open
+        onOpenChange={() => {}}
+        host={{
+          ID: 1,
+          CreatedAt: "",
+          UpdatedAt: "",
+          domains: "a.com",
+          matcher: "",
+          Upstreams: [{ backend: "127.0.0.1:8080" }],
+          dnsProviderId: 3,
+        } as Host}
+        dnsProviders={null}
+        submitting={false}
+        onSubmit={onSubmit}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ dnsProviderId: 3 })
+    );
   });
 
   it("requires at least one domain and upstream", async () => {
