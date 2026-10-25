@@ -34,8 +34,8 @@ func TestParseInstalled_Fixture(t *testing.T) {
 	if !duck {
 		t.Fatal("duckdns missing")
 	}
-	// caddy-json-schema registers only a CLI command, not a module, so it
-	// never appears in list-modules output.
+	// caddy-json-schema registers only a CLI command, not a module, so it is
+	// not in list-modules output; ExecInspector.Installed adds it from build-info.
 }
 
 func TestParseInstalled_Invalid(t *testing.T) {
@@ -49,6 +49,9 @@ case "$1" in
   version) echo "v2.11.4 h1:abcdef="; ;;
   list-modules)
     echo '[{"module_name":"http","module_type":"standard","version":"v2.11.4","package_url":"github.com/caddyserver/caddy/v2"},{"module_name":"dns.providers.duckdns","module_type":"non-standard","version":"v0.5.0","package_url":"github.com/caddy-dns/duckdns"}]'
+    ;;
+  build-info)
+    printf 'path\tcaddy\nmod\tgithub.com/caddyserver/caddy/v2\tv2.11.4\th1:x\ndep\tgithub.com/abiosoft/caddy-json-schema\tv0.0.0-2022\th1:y\ndep\tgithub.com/caddy-dns/duckdns\tv0.5.0\th1:z\ndep\tgithub.com/other/lib\tv1.0.0\t=>\tgithub.com/fork/lib\tv1.0.1\n'
     ;;
   validate)
     if [ "$2" != "--config" ] || [ "$4" != "--adapter" ] || [ -n "$5" ]; then echo "bad args: $*" >&2; exit 2; fi
@@ -80,8 +83,36 @@ func TestExecInspector_Installed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pkgs) != 1 || pkgs[0].Path != "github.com/caddy-dns/duckdns" || pkgs[0].Version != "v0.5.0" {
+	if len(pkgs) != 2 || pkgs[0].Path != JSONSchemaPackage || pkgs[0].Version != "v0.0.0-2022" || pkgs[0].Modules != nil {
 		t.Fatalf("unexpected: %+v", pkgs)
+	}
+	if pkgs[1].Path != "github.com/caddy-dns/duckdns" || pkgs[1].Version != "v0.5.0" {
+		t.Fatalf("unexpected: %+v", pkgs)
+	}
+}
+
+func TestExecInspector_Installed_BuildInfoFails(t *testing.T) {
+	bin := writeFake(t, "#!/bin/sh\ncase \"$1\" in list-modules) echo '[]';; *) echo nobuild >&2; exit 1;; esac\n")
+	_, err := ExecInspector{}.Installed(context.Background(), bin)
+	if err == nil || !strings.Contains(err.Error(), "nobuild") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestParseBuildInfoDeps_Fixture(t *testing.T) {
+	data, err := os.ReadFile("testdata/build-info.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := ParseBuildInfoDeps(data)
+	if deps[JSONSchemaPackage] != "v0.0.0-20220621031927-c4d6e132f3af" {
+		t.Fatalf("json-schema: %q", deps[JSONSchemaPackage])
+	}
+	if deps["github.com/caddy-dns/duckdns"] != "v0.5.0" {
+		t.Fatalf("duckdns: %q", deps["github.com/caddy-dns/duckdns"])
+	}
+	if got := ParseBuildInfoDeps([]byte("dep\ta\tv1\t=>\tb\tv2\n"))["a"]; got != "v1" {
+		t.Fatalf("replacement: %q", got)
 	}
 }
 

@@ -111,7 +111,42 @@ func (ExecInspector) Installed(ctx context.Context, bin string) ([]InstalledPack
 	if err := json.Unmarshal(out, &probe); err != nil {
 		return nil, fmt.Errorf("parse list-modules output: %w", err)
 	}
-	return ParseInstalled(out), nil
+	pkgs := ParseInstalled(out)
+
+	// Command-only plugins (e.g. caddy-json-schema) register no module, so
+	// they only show up in build-info.
+	bi, err := run(ctx, bin, "build-info")
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := ParseBuildInfoDeps(bi)[JSONSchemaPackage]; ok {
+		found := false
+		for _, p := range pkgs {
+			if p.Path == JSONSchemaPackage {
+				found = true
+				break
+			}
+		}
+		if !found {
+			pkgs = append(pkgs, InstalledPackage{Path: JSONSchemaPackage, Version: v})
+			sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].Path < pkgs[j].Path })
+		}
+	}
+	return pkgs, nil
+}
+
+// ParseBuildInfoDeps returns path -> version for the `dep` lines of
+// `caddy build-info` (tab separated). Replacement lines carry extra fields;
+// the version field is used as-is.
+func ParseBuildInfoDeps(out []byte) map[string]string {
+	deps := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
+		if len(f) >= 3 && f[0] == "dep" {
+			deps[f[1]] = f[2]
+		}
+	}
+	return deps
 }
 
 // Validate loads and provisions configJSON with the binary without starting it.
