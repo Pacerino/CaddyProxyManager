@@ -90,6 +90,8 @@ All settings are environment variables prefixed with `CPM_`.
 | `CPM_CADDY_RELOADSTRATEGY` | `systemd` | Reload strategy (Caddyfile mode): `systemd`, `exec`, `api` or `none`. |
 | `CPM_CADDY_BINARY` | `caddy` | Caddy executable for the `exec` reload strategy. |
 | `CPM_CADDY_SERVICE` | `caddy.service` | systemd unit for the `systemd` reload strategy. |
+| `CPM_CADDY_SUPERVISE` | `false` (`true` in the Docker image) | CPM starts and supervises the Caddy process itself (API mode); required for installing plugins in Docker. |
+| `CPM_CADDY_CONFIGFILE` | `<CPM_DATAFOLDER>/caddy.json` | JSON config the supervised Caddy starts with. |
 | `CPM_CADDYFILE` | `/etc/caddy/Caddyfile` | Main Caddyfile (used by `exec`/`api` reload). |
 | `CPM_CADDY_SCHEMAFILE` | `/usr/share/cpm/caddy_schema.json` | Caddy JSON schema used to describe DNS provider fields (API mode). |
 
@@ -111,6 +113,7 @@ All settings are environment variables prefixed with `CPM_`.
 | --- | --- | --- |
 | `CPM_DATAFOLDER` | `/etc/caddy/` | Data + per-host config folder. |
 | `CPM_LOGFOLDER` | `/var/log/caddy` | Per-host log folder. |
+| `CPM_PLUGIN_INSTALL` | `true` | Allow installing and removing Caddy plugins from the UI. Set to `false` to make the installed list read-only. |
 | `CPM_FRONTENDDIR` | — | Serve the frontend from this directory instead of the embedded assets. |
 | `CPM_ADMIN_EMAIL` | `admin@example.com` | Seed admin email (first run, local mode). |
 | `CPM_ADMIN_PASSWORD` | `changeme` | Seed admin password (first run, local mode). |
@@ -186,7 +189,7 @@ Yes. Set `CPM_AUTH_MODE=oidc` and configure the `CPM_AUTH_OIDC_*` variables. On 
 <details>
 <summary><strong>Does CPM run Caddy for me?</strong></summary>
 
-The Docker image does — its entrypoint launches Caddy with the admin API and then CPM. For bare-metal installs, run Caddy yourself and point CPM at it (`CPM_CADDYFILE` / `CPM_CADDY_ADMINURL`) with the appropriate reload strategy.
+The Docker image does — CPM starts and supervises Caddy itself (restarting it if it crashes) and keeps its data in `/data`. For bare-metal installs, run Caddy yourself and point CPM at it (`CPM_CADDYFILE` / `CPM_CADDY_ADMINURL`) with the appropriate reload strategy.
 </details>
 
 ## 🔐 DNS providers
@@ -202,6 +205,31 @@ The `-dns` image flavor bundles these providers: [`cloudflare`](https://github.c
 
 > [!NOTE]
 > Hosts using a DNS provider get a dedicated TLS policy that uses Let's Encrypt only; there is no ZeroSSL fallback for DNS-challenge hosts.
+
+## 🧩 Installing plugins
+
+On the **Plugins** page you can add or remove Caddy plugins without rebuilding the image. CPM asks the [Caddy download service](https://caddyserver.com/download) for a build containing the plugin, swaps Caddy over to it and rolls back automatically if Caddy does not come up healthy.
+
+- **Any registered plugin works.** Search the catalog or enter a Go module path (e.g. `github.com/mholt/caddy-ratelimit`). Plugins from the tested list (the ones bundled in the `-dns` image) are marked as tested; everything else is marked untested, so use it at your own risk.
+- **Restart note.** Switching binaries restarts Caddy, so there is a short interruption while the new build starts. Existing plugins stay pinned to their installed version; the new one is added at its latest version.
+- **Rollback.** CPM keeps the previous binary. If the new build fails to start, or applying your hosts to it reports errors, CPM switches back automatically and shows the error.
+- **Updates.** When a newer version of an installed plugin is available, the Plugins page shows an update banner and offers to update (it applies the same safe switch with rollback). A failed update is reported on the page.
+- **Disabling.** Set `CPM_PLUGIN_INSTALL=false` to turn installing off; the installed list stays visible but read-only.
+- **Internet access** is required to download builds. For offline setups use the `-dns` image flavor (or build your own with `CADDY_PLUGINS`) and keep plugin install disabled.
+- **Requirements.** API mode (`CPM_CADDY_MODE=api`) is required. The Docker image works out of the box because CPM supervises Caddy itself (`CPM_CADDY_SUPERVISE=true`); Caddy's certificates and autosave are stored in the `/data` volume. Managed binaries live in `<CPM_DATAFOLDER>/caddy-bin/`.
+
+### systemd setup
+
+Without Docker, Caddy runs under systemd and CPM can only restart the service, so the unit must start CPM's managed binary. The Plugins page detects this and shows the exact drop-in to install; it looks like this (adjust the path to your `CPM_DATAFOLDER`, keep your original arguments):
+
+```ini
+# systemctl edit caddy.service
+[Service]
+ExecStart=
+ExecStart=/etc/caddy/caddy-bin/current run --environ --config /etc/caddy/Caddyfile
+```
+
+Then run `systemctl daemon-reload && systemctl restart caddy`. The service user must be able to read the managed binary and CPM needs permission to restart the unit. Run CPM with `CPM_CADDY_RELOADSTRATEGY=systemd` (the default).
 
 ## ⚠️ Limitations
 
