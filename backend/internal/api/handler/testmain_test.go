@@ -32,7 +32,7 @@ func newTestHandler(t *testing.T) Handler {
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	if err := db.AutoMigrate(&database.Host{}, &database.Upstream{}, &database.HostPlugin{}, &database.User{}, &database.ModuleConfig{}); err != nil {
+	if err := db.AutoMigrate(&database.Host{}, &database.Upstream{}, &database.HostPlugin{}, &database.User{}, &database.ModuleConfig{}, &database.DNSProvider{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return Handler{DB: db}

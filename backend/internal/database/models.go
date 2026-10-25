@@ -4,16 +4,21 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
 type Host struct {
 	gorm.Model
-	Domains   string `json:"domains" validate:"required,domains"`
-	Matcher   string `json:"matcher"`
-	Upstreams []Upstream
-	Plugins   []HostPlugin
+	Domains string `json:"domains" validate:"required,domains"`
+	Matcher string `json:"matcher"`
+	// DNSProviderID optionally references a DNSProvider used for the host's
+	// DNS-challenge certificates. Plain nullable column, no FK constraint;
+	// delete protection is enforced in the handler.
+	DNSProviderID *uint `json:"dnsProviderId"`
+	Upstreams     []Upstream
+	Plugins       []HostPlugin
 }
 
 // HostPlugin is a per-host plugin configuration. Handler holds the rendered
@@ -91,6 +96,22 @@ type ModuleConfig struct {
 	Config JSON `json:"config" validate:"required"`
 	// Enabled controls whether the fragment is applied on reconcile.
 	Enabled bool `json:"enabled" gorm:"default:true"`
+}
+
+// DNSProvider is a named set of DNS provider credentials that hosts can
+// reference. ModuleID is the dotted Caddy module name, e.g.
+// "dns.providers.cloudflare"; Config holds the provider's JSON configuration.
+type DNSProvider struct {
+	gorm.Model
+	Name     string `json:"name" gorm:"uniqueIndex" validate:"required"`
+	ModuleID string `json:"moduleId" validate:"required"`
+	Config   JSON   `json:"config"`
+}
+
+// ShortName returns the last dot-separated segment of a Caddy module ID,
+// e.g. "dns.providers.cloudflare" -> "cloudflare".
+func ShortName(moduleID string) string {
+	return moduleID[strings.LastIndex(moduleID, ".")+1:]
 }
 
 type User struct {
