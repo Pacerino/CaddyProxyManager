@@ -142,8 +142,11 @@ func startSupervisor(db *gorm.DB, p *caddy.APIProvider) *supervisor.Supervisor {
 // while the setup doesn't allow them.
 func newPluginManager(db *gorm.DB, p *caddy.APIProvider, sup *supervisor.Supervisor, h *handler.Handler) *pluginmgr.Manager {
 	var restarter pluginmgr.Restarter = &pluginmgr.SystemdRestarter{Unit: pluginmgr.DBusUnit{}, Service: config.Configuration.Caddy.Service}
+	var caddyLogs func() []string
 	if sup != nil {
 		restarter = sup
+		// A rolled-back operation reports what the failed Caddy printed.
+		caddyLogs = sup.RecentLogs
 	}
 	return &pluginmgr.Manager{
 		Builds:  pluginmgr.NewBuildService(),
@@ -168,6 +171,7 @@ func newPluginManager(db *gorm.DB, p *caddy.APIProvider, sup *supervisor.Supervi
 		DB:            db,
 		// The DNS provider forms follow the binary that now runs.
 		OnChanged: h.ReloadDNSSchemas,
+		CaddyLogs: caddyLogs,
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"sync"
@@ -36,8 +37,23 @@ type Supervisor struct {
 	// TermTimeout is how long Restart/Stop wait after SIGTERM before SIGKILL (default 10s).
 	TermTimeout time.Duration
 
+	// stdout and stderr receive Caddy's output; nil means CPM's own.
+	stdout, stderr io.Writer
+	logs           logRing
+
 	mu  sync.Mutex
 	cur *proc
+}
+
+// RecentLogs returns Caddy's most recent output lines (stdout and stderr),
+// oldest first, across restarts.
+func (s *Supervisor) RecentLogs() []string { return s.logs.snapshot() }
+
+func orStd(w, std io.Writer) io.Writer {
+	if w != nil {
+		return w
+	}
+	return std
 }
 
 // proc is one started child. cancel is closed when the exit is intentional
@@ -79,8 +95,9 @@ func (s *Supervisor) termTimeout() time.Duration {
 func (s *Supervisor) spawn(attempt int) error {
 	cmd := exec.Command(s.Binary(), "run", "--resume", "--config", s.ConfigFile)
 	cmd.Env = append(os.Environ(), s.Env...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	stdout := &lineWriter{out: orStd(s.stdout, os.Stdout), ring: &s.logs}
+	stderr := &lineWriter{out: orStd(s.stderr, os.Stderr), ring: &s.logs}
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -88,6 +105,8 @@ func (s *Supervisor) spawn(attempt int) error {
 	s.cur = p
 	go func() {
 		_ = cmd.Wait()
+		stdout.flush()
+		stderr.flush()
 		close(p.done)
 		s.handleExit(p, attempt)
 	}()

@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -61,6 +62,8 @@ func newSup(bin string, cfg string) *Supervisor {
 		Binary:     func() string { return bin },
 		ConfigFile: cfg,
 		Backoff:    func(int) time.Duration { return 0 },
+		stdout:     io.Discard,
+		stderr:     io.Discard,
 	}
 }
 
