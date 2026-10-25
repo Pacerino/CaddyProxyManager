@@ -16,6 +16,13 @@ if [ ! -f "$CADDY_CONFIG" ]; then
 JSON
 fi
 
+# When CPM supervises Caddy itself (API mode only) it starts, restarts and
+# switches the binary on plugin changes, so the entrypoint must not start one.
+if [ "${CPM_CADDY_SUPERVISE:-}" = "true" ] && [ "${CPM_CADDY_MODE:-api}" = "api" ]; then
+  echo "Starting Caddy Proxy Manager (supervising Caddy)…"
+  exec /usr/local/bin/cpm
+fi
+
 # Allow pointing at a custom Caddy build (e.g. one compiled with extra plugins)
 # mounted into the container. Keep this in sync with CPM_CADDY_BINARY so CPM's
 # module detection inspects the same binary.

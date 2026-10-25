@@ -72,10 +72,16 @@ ENV CPM_DATAFOLDER=/data \
     CPM_CADDYFILE=/data/Caddyfile \
     CPM_CADDY_MODE=api \
     CPM_CADDY_ADMINURL=http://localhost:2019 \
-    CPM_CADDY_SCHEMAFILE=/usr/share/cpm/caddy_schema.json
+    CPM_CADDY_SCHEMAFILE=/usr/share/cpm/caddy_schema.json \
+    CPM_CADDY_SUPERVISE=true \
+    CPM_CADDY_CONFIGFILE=/data/caddy.json \
+    XDG_CONFIG_HOME=/data/.config \
+    XDG_DATA_HOME=/data/.local/share
 
 VOLUME ["/data"]
 EXPOSE 3001 80 443
-# The entrypoint launches Caddy (admin API) then CPM. Override the CMD or set
-# CADDY_CONFIG to bring your own Caddy configuration.
+# CPM supervises Caddy itself (CPM_CADDY_SUPERVISE=true, API mode); otherwise the
+# entrypoint launches Caddy (admin API) then CPM. Caddy's autosave and
+# certificates live under /data via XDG_*. Set CADDY_CONFIG to bring your own
+# Caddy configuration when not supervising.
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
