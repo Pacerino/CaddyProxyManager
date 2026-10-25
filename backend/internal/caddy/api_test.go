@@ -1,6 +1,8 @@
 package caddy
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +18,10 @@ type fakeCaddy struct {
 	serverExists bool
 	routes       map[string]bool // route id -> exists
 	calls        []string        // method+path log for assertions
+
+	tlsExists        bool  // apps/tls present
+	automationExists bool  // apps/tls/automation present
+	tlsPolicies      []any // apps/tls/automation/policies (nil = absent)
 }
 
 func newFakeCaddy() *fakeCaddy {
@@ -28,6 +34,10 @@ func (f *fakeCaddy) handler() http.Handler {
 		path := r.URL.Path
 
 		switch {
+		case f.handleTLS(w, r):
+		case r.Method == http.MethodGet && path == "/config/":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("{}"))
 		case r.Method == http.MethodGet && strings.HasPrefix(path, "/config/apps/http/servers/"):
 			// Caddy returns 200 + "null" when the server is absent.
 			if f.serverExists {
@@ -61,6 +71,81 @@ func (f *fakeCaddy) handler() http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	})
+}
+
+// handleTLS serves the apps/tls paths, mirroring Caddy: GET of an absent path
+// is 200 + "null", PUT creates (parent must exist), PATCH replaces.
+func (f *fakeCaddy) handleTLS(w http.ResponseWriter, r *http.Request) bool {
+	path := r.URL.Path
+	const tls, auto, pol = "/config/apps/tls", "/config/apps/tls/automation", "/config/apps/tls/automation/policies"
+	if path != tls && path != auto && path != pol {
+		return false
+	}
+	var body json.RawMessage
+	if r.Method != http.MethodGet {
+		var err error
+		if body, err = io.ReadAll(r.Body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return true
+		}
+	}
+	policies := func(raw json.RawMessage) bool {
+		var v []any
+		if json.Unmarshal(raw, &v) != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return false
+		}
+		f.tlsPolicies = v
+		return true
+	}
+	switch {
+	case r.Method == http.MethodGet:
+		out := "null"
+		switch {
+		case path == tls && f.tlsExists:
+			out = "{}"
+		case path == auto && f.automationExists:
+			out = "{}"
+		case path == pol && f.tlsPolicies != nil:
+			b, _ := json.Marshal(f.tlsPolicies)
+			out = string(b)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(out))
+	case r.Method == http.MethodPut && path == tls && !f.tlsExists:
+		var v struct {
+			Automation struct {
+				Policies json.RawMessage `json:"policies"`
+			} `json:"automation"`
+		}
+		if json.Unmarshal(body, &v) != nil || !policies(v.Automation.Policies) {
+			w.WriteHeader(http.StatusBadRequest)
+			return true
+		}
+		f.tlsExists, f.automationExists = true, true
+		w.WriteHeader(http.StatusOK)
+	case r.Method == http.MethodPut && path == auto && f.tlsExists && !f.automationExists:
+		var v struct {
+			Policies json.RawMessage `json:"policies"`
+		}
+		if json.Unmarshal(body, &v) != nil || !policies(v.Policies) {
+			w.WriteHeader(http.StatusBadRequest)
+			return true
+		}
+		f.automationExists = true
+		w.WriteHeader(http.StatusOK)
+	case r.Method == http.MethodPut && path == pol && f.automationExists && f.tlsPolicies == nil:
+		if policies(body) {
+			w.WriteHeader(http.StatusOK)
+		}
+	case r.Method == http.MethodPatch && path == pol && f.tlsPolicies != nil:
+		if policies(body) {
+			w.WriteHeader(http.StatusOK)
+		}
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	return true
 }
 
 func newTestProvider(url string) *APIProvider {
