@@ -18,8 +18,14 @@ fi
 
 # When CPM supervises Caddy itself (API mode only) it starts, restarts and
 # switches the binary on plugin changes, so the entrypoint must not start one.
-supervise="$(printf %s "${CPM_CADDY_SUPERVISE:-}" | tr '[:upper:]' '[:lower:]')"
-mode="$(printf %s "${CPM_CADDY_MODE:-api}" | tr '[:upper:]' '[:lower:]')"
+# Read both variables the way CPM does: CPM_CADDY_SUPERVISE with Go's
+# strconv.ParseBool, and an empty or unset value means CPM's default (false,
+# and mode "caddyfile").
+case "${CPM_CADDY_SUPERVISE:-}" in
+  1|t|T|TRUE|true|True) supervise=true ;;
+  *) supervise=false ;;
+esac
+mode="$(printf %s "${CPM_CADDY_MODE:-caddyfile}" | tr '[:upper:]' '[:lower:]')"
 if [ "$supervise" = "true" ] && [ "$mode" = "api" ]; then
   # The supervised Caddy starts with CPM_CADDY_CONFIGFILE; point it at the
   # config seeded above so a custom CADDY_CONFIG keeps working.
