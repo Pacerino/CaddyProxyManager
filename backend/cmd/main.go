@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Pacerino/CaddyProxyManager/internal/api"
 	"github.com/Pacerino/CaddyProxyManager/internal/auth"
@@ -54,7 +55,7 @@ func main() {
 func startReconcile() {
 	db := database.GetInstance()
 	if migrated, err := reconcile.MigrateLegacyCloudflare(db); err != nil {
-		logger.Error("LegacyCloudflareMigrationError", err)
+		logger.Warn("Legacy Cloudflare migration failed: %v", err)
 	} else if migrated {
 		logger.Info("Migrated legacy Cloudflare config to a DNS provider")
 	}
@@ -63,17 +64,21 @@ func startReconcile() {
 	go func() {
 		ctx := context.Background()
 		if err := reconcile.WaitForCaddy(ctx, p, reconcile.DefaultBackoff); err != nil {
-			logger.Error("CaddyReconcileError", err)
+			logger.Warn("Caddy reconcile: waiting for Caddy failed: %v", err)
 			return
 		}
 		err := jobqueue.AddJob(jobqueue.Job{Name: "CaddyReconcile", Action: func() error {
-			for _, err := range reconcile.Run(ctx, db, p, caddy.ListModules, reconcile.DefaultBackoff) {
-				logger.Error("CaddyReconcileError", err)
+			// Bound the wait so a Caddy outage can't block the serialized
+			// worker (and every handler job behind it) forever.
+			jobCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+			for _, err := range reconcile.Run(jobCtx, db, p, caddy.ListModules, reconcile.DefaultBackoff) {
+				logger.Warn("Caddy reconcile: %v", err)
 			}
 			return nil
 		}})
 		if err != nil {
-			logger.Error("CaddyReconcileError", err)
+			logger.Warn("Caddy reconcile: could not enqueue job: %v", err)
 		}
 	}()
 }

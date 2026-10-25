@@ -113,6 +113,12 @@ func Run(ctx context.Context, db *gorm.DB, p *caddy.APIProvider, listModules fun
 		errs = append(errs, fmt.Errorf("load module configs: %w", err))
 	}
 	for _, mc := range configs {
+		if mc.ModuleID == legacyCloudflareModule {
+			// Owned by the migration; applying it would overwrite the
+			// policies array just synced.
+			logger.Warn("Skipping legacy %s module config; it was not migrated", mc.ModuleID)
+			continue
+		}
 		if err := p.ApplyModuleConfig(mc); err != nil {
 			errs = append(errs, fmt.Errorf("apply module config %s: %w", mc.ModuleID, err))
 		}

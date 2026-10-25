@@ -255,3 +255,42 @@ func TestDefaultBackoff(t *testing.T) {
 		}
 	}
 }
+
+const legacyPolicy = `{"issuers":[{"module":"acme","challenges":{"dns":{"provider":{"name":"cloudflare","api_token":"x"}}}}]}`
+
+func TestRun_RemovesLegacyPolicyKeepsForeign(t *testing.T) {
+	db, p, fake := setup(t)
+	fake.tlsExists, fake.auto = true, true
+	var legacy, foreign any
+	_ = json.Unmarshal([]byte(legacyPolicy), &legacy)
+	_ = json.Unmarshal([]byte(`{"subjects":["x.org"]}`), &foreign)
+	fake.policies = []any{legacy, foreign}
+
+	if errs := Run(context.Background(), db, p, modules, noBackoff); len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	b, _ := json.Marshal(fake.policies)
+	if string(b) != `[{"subjects":["x.org"]}]` {
+		t.Errorf("policies = %s, want only the foreign policy", b)
+	}
+}
+
+func TestRun_SkipsKeptLegacyModuleConfig(t *testing.T) {
+	db, p, fake := setup(t)
+	prov := database.DNSProvider{Name: "CF", ModuleID: "dns.providers.cloudflare", Config: database.JSON(`{"api_token":"t"}`)}
+	db.Create(&prov)
+	h := database.Host{Domains: "a.example.com", DNSProviderID: &prov.ID}
+	db.Create(&h)
+	db.Create(&database.ModuleConfig{ModuleID: "dns.providers.cloudflare", Path: "apps/tls/automation/policies", Config: database.JSON(legacyPolicy), Enabled: true})
+
+	if errs := Run(context.Background(), db, p, modules, noBackoff); len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if len(fake.moduleApplies) != 0 {
+		t.Errorf("module applies = %v, want none", fake.moduleApplies)
+	}
+	b, _ := json.Marshal(fake.policies)
+	if !strings.Contains(string(b), caddy.HostPolicyID(h.ID)) {
+		t.Errorf("policies = %s, want %s", b, caddy.HostPolicyID(h.ID))
+	}
+}
