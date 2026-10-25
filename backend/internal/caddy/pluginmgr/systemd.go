@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/dbus"
@@ -49,6 +50,10 @@ type SetupConfig struct {
 	ManagedPath    string
 	// AdminURL is CPM_CADDY_ADMINURL; empty means the local default.
 	AdminURL string
+	// Seed prepares ManagedPath when a drop-in would be needed but the managed
+	// binary does not exist yet. Nil means preparing it is not allowed (plugin
+	// install is off).
+	Seed func() error
 }
 
 // remoteAdminReason explains why plugins can't be installed for a Caddy whose
@@ -103,6 +108,20 @@ func DetectSetup(ctx context.Context, cfg SetupConfig, unit SystemdUnit) SetupSt
 	}
 	if reason == "" {
 		return SetupStatus{State: SetupReady}
+	}
+
+	// The drop-in points the unit at ManagedPath: never offer it unless that
+	// file exists, or applying it would leave Caddy without a binary.
+	if _, err := os.Stat(cfg.ManagedPath); err != nil {
+		if cfg.Seed == nil {
+			return SetupStatus{State: SetupUnsupported, Reason: "plugin install is disabled (CPM_PLUGIN_INSTALL=false)"}
+		}
+		if err := cfg.Seed(); err != nil {
+			return SetupStatus{State: SetupUnsupported, Reason: fmt.Sprintf("could not prepare a managed Caddy copy: %v", err)}
+		}
+		if _, err := os.Stat(cfg.ManagedPath); err != nil {
+			return SetupStatus{State: SetupUnsupported, Reason: fmt.Sprintf("could not prepare a managed Caddy copy: %v", err)}
+		}
 	}
 
 	dropIn := "[Service]\nExecStart=\nExecStart=" + cfg.ManagedPath

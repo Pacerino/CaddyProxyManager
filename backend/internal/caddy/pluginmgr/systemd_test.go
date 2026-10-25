@@ -137,3 +137,50 @@ func TestDetectSetup_LocalAdminAPI(t *testing.T) {
 		}
 	}
 }
+
+func missingManaged(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "caddy-bin", "current")
+}
+
+func TestDetectSetup_NoDropInWithoutManagedBinaryWhenDisabled(t *testing.T) {
+	u := &fakeUnit{path: "/usr/bin/caddy", args: []string{"run"}}
+	st := DetectSetup(context.Background(), SetupConfig{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: missingManaged(t)}, u)
+	if st.State != SetupUnsupported || st.DropIn != "" || st.Reason != "plugin install is disabled (CPM_PLUGIN_INSTALL=false)" {
+		t.Fatalf("status = %+v", st)
+	}
+}
+
+func TestDetectSetup_NoDropInWhenSeedingFails(t *testing.T) {
+	u := &fakeUnit{path: "/usr/bin/caddy", args: []string{"run"}}
+	cfg := SetupConfig{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: missingManaged(t),
+		Seed: func() error { return errors.New("finding the Caddy binary: not found") }}
+	st := DetectSetup(context.Background(), cfg, u)
+	if st.State != SetupUnsupported || st.DropIn != "" || st.Reason != "could not prepare a managed Caddy copy: finding the Caddy binary: not found" {
+		t.Fatalf("status = %+v", st)
+	}
+}
+
+func TestDetectSetup_SeedThatLeavesNoBinaryOffersNoDropIn(t *testing.T) {
+	u := &fakeUnit{path: "/usr/bin/caddy", args: []string{"run"}}
+	cfg := SetupConfig{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: missingManaged(t), Seed: func() error { return nil }}
+	st := DetectSetup(context.Background(), cfg, u)
+	if st.State != SetupUnsupported || st.DropIn != "" {
+		t.Fatalf("status = %+v", st)
+	}
+}
+
+func TestDetectSetup_SeedsThenOffersDropIn(t *testing.T) {
+	managed := missingManaged(t)
+	u := &fakeUnit{path: "/usr/bin/caddy", args: []string{"run"}}
+	cfg := SetupConfig{ReloadStrategy: "systemd", Service: "caddy", ManagedPath: managed, Seed: func() error {
+		if err := os.MkdirAll(filepath.Dir(managed), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(managed, []byte("x"), 0o755)
+	}}
+	st := DetectSetup(context.Background(), cfg, u)
+	if st.State != SetupNeeded || st.DropIn == "" {
+		t.Fatalf("status = %+v", st)
+	}
+}

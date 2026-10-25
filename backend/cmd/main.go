@@ -99,8 +99,8 @@ func managedBinaryPath() string {
 
 // detectSetup reports whether Caddy can be restarted on a managed binary.
 // When a systemd unit needs the drop-in and plugin install is on, the managed
-// binary is seeded first (a copy of the configured one), so the drop-in
-// points at a file that exists.
+// binary is seeded first (a copy of the configured one); DetectSetup never
+// offers the drop-in while that binary is missing.
 func detectSetup(ctx context.Context, mgr *pluginmgr.Manager) pluginmgr.SetupStatus {
 	c := config.Configuration.Caddy
 	cfg := pluginmgr.SetupConfig{
@@ -110,16 +110,14 @@ func detectSetup(ctx context.Context, mgr *pluginmgr.Manager) pluginmgr.SetupSta
 		ManagedPath:    managedBinaryPath(),
 		AdminURL:       c.AdminURL,
 	}
-	st := pluginmgr.DetectSetup(ctx, cfg, pluginmgr.DBusUnit{})
-	if st.State != pluginmgr.SetupNeeded || !config.Configuration.PluginInstall {
-		return st
-	}
-	if _, ok := mgr.Store.Current(); ok {
-		return st
-	}
-	if err := mgr.EnsureSeeded(); err != nil {
-		logger.Warn("Seeding the managed Caddy binary: %v", err)
-		return st
+	if config.Configuration.PluginInstall {
+		cfg.Seed = func() error {
+			err := mgr.EnsureSeeded()
+			if err != nil {
+				logger.Warn("Seeding the managed Caddy binary: %v", err)
+			}
+			return err
+		}
 	}
 	return pluginmgr.DetectSetup(ctx, cfg, pluginmgr.DBusUnit{})
 }
