@@ -307,7 +307,19 @@ func (m *Manager) setPreviousCaddyVersion(id, v string) {
 }
 
 func (m *Manager) run(id string, kind OpKind, pkg string) {
-	step, switched, err := m.execute(context.Background(), id, kind, pkg)
+	step, err := StepFailed, error(nil)
+	// A panic in a dependency fails the operation instead of taking CPM, and
+	// with it the supervised Caddy, down.
+	defer func() {
+		if r := recover(); r != nil {
+			step, err = StepFailed, fmt.Errorf("internal error: %v", r)
+			logger.Warn("Plugin operation %s %s panicked: %v", kind, pkg, r)
+		}
+		m.finish(id, step, err)
+	}()
+
+	var switched bool
+	step, switched, err = m.execute(context.Background(), id, kind, pkg)
 	if err != nil {
 		logger.Warn("Plugin operation %s %s ended %s: %v", kind, pkg, step, err)
 	}
@@ -316,7 +328,10 @@ func (m *Manager) run(id string, kind OpKind, pkg string) {
 	if switched && m.OnChanged != nil {
 		m.OnChanged()
 	}
+}
 
+// finish publishes the operation's final step and frees the manager.
+func (m *Manager) finish(id string, step OpStep, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if op, ok := m.ops[id]; ok {
