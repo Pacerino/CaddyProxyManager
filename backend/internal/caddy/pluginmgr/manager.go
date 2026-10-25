@@ -69,13 +69,15 @@ var errStoreAborted = errors.New("storing the binary failed")
 
 // Operation is the status of one add, remove or update.
 type Operation struct {
-	ID         string    `json:"id"`
-	Kind       OpKind    `json:"kind"`
-	Package    string    `json:"package"`
-	Step       OpStep    `json:"step"`
-	Error      string    `json:"error,omitempty"`
-	StartedAt  time.Time `json:"startedAt"`
-	FinishedAt time.Time `json:"finishedAt,omitzero"`
+	ID      string `json:"id"`
+	Kind    OpKind `json:"kind"`
+	Package string `json:"package"`
+	Step    OpStep `json:"step"`
+	Error   string `json:"error,omitempty"`
+	// CaddyVersion is the Caddy version the downloaded binary reports.
+	CaddyVersion string    `json:"caddyVersion,omitempty"`
+	StartedAt    time.Time `json:"startedAt"`
+	FinishedAt   time.Time `json:"finishedAt,omitzero"`
 }
 
 // Manager changes the plugin set of the managed Caddy binary: it downloads a
@@ -249,6 +251,14 @@ func (m *Manager) setStep(id string, step OpStep) {
 	}
 }
 
+func (m *Manager) setCaddyVersion(id, v string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if op, ok := m.ops[id]; ok {
+		op.CaddyVersion = v
+	}
+}
+
 func (m *Manager) run(id string, kind OpKind, pkg string) {
 	step, switched, err := m.execute(context.Background(), id, kind, pkg)
 	if err != nil {
@@ -304,7 +314,9 @@ func (m *Manager) execute(ctx context.Context, id string, kind OpKind, pkg strin
 	m.setStep(id, StepVerifying)
 	live, err := m.LiveConfig(ctx)
 	if err == nil {
-		err = verifyBinary(ctx, m.Inspect, path, version, pkgs, live)
+		var got string
+		got, err = verifyBinary(ctx, m.Inspect, path, version, pkgs, live)
+		m.setCaddyVersion(id, got)
 	} else {
 		err = fmt.Errorf("reading the live Caddy config: %w", err)
 	}

@@ -439,11 +439,31 @@ func assertVerifyFailed(t *testing.T, e *testEnv, op *Operation, msg string) {
 	}
 }
 
-func TestVerify_WrongVersion(t *testing.T) {
+func TestVerify_OlderVersion(t *testing.T) {
 	e := newEnv(t)
 	e.builds.version = "v2.9.0"
 	op := e.run(t, OpAdd, ratelimit)
-	assertVerifyFailed(t, e, op, "v2.9.0")
+	assertVerifyFailed(t, e, op, "new binary reports Caddy v2.9.0, older than the running "+shippedVer)
+	if op.CaddyVersion != "v2.9.0" {
+		t.Fatalf("caddyVersion: %q", op.CaddyVersion)
+	}
+}
+
+func TestVerify_NewerVersion(t *testing.T) {
+	e := newEnv(t)
+	e.builds.version = "v2.99.0"
+	op := e.run(t, OpAdd, ratelimit)
+	if op.Step != StepDone || op.CaddyVersion != "v2.99.0" {
+		t.Fatalf("want done at v2.99.0, got %+v", op)
+	}
+}
+
+func TestVerify_EqualVersion(t *testing.T) {
+	e := newEnv(t)
+	op := e.run(t, OpAdd, ratelimit)
+	if op.Step != StepDone || op.CaddyVersion != shippedVer {
+		t.Fatalf("want done at %s, got %+v", shippedVer, op)
+	}
 }
 
 func TestVerify_MissingPackage(t *testing.T) {

@@ -105,36 +105,41 @@ func requestedPackages(kind OpKind, pkg string, installed []InstalledPackage, re
 }
 
 // verifyBinary checks a downloaded binary before it may run as the live
-// Caddy: it reports the expected Caddy version, contains the module of every
+// Caddy: it reports a Caddy version no older than the running one (the build
+// service always builds its latest Caddy), contains the module of every
 // requested package (pinned ones at the requested version) and loads the
 // live config.
-func verifyBinary(ctx context.Context, insp Inspector, bin, wantVersion string, want []PinnedPackage, liveConfig []byte) error {
+func verifyBinary(ctx context.Context, insp Inspector, bin, runningVersion string, want []PinnedPackage, liveConfig []byte) (string, error) {
 	v, err := insp.Version(ctx, bin)
 	if err != nil {
-		return fmt.Errorf("new binary does not run: %w", err)
+		return "", fmt.Errorf("new binary does not run: %w", err)
 	}
-	if v != wantVersion {
-		return fmt.Errorf("new binary reports Caddy %s, expected %s", v, wantVersion)
+	cmp, err := compareSemver(v, runningVersion)
+	if err != nil {
+		return v, fmt.Errorf("comparing Caddy versions: %w", err)
+	}
+	if cmp < 0 {
+		return v, fmt.Errorf("new binary reports Caddy %s, older than the running %s", v, runningVersion)
 	}
 
 	got, err := insp.Installed(ctx, bin)
 	if err != nil {
-		return fmt.Errorf("listing packages of the new binary: %w", err)
+		return v, fmt.Errorf("listing packages of the new binary: %w", err)
 	}
 	for _, p := range want {
 		m, ok := owningModule(p.Path, got)
 		if !ok {
-			return fmt.Errorf("new binary lacks package %s", p.Path)
+			return v, fmt.Errorf("new binary lacks package %s", p.Path)
 		}
 		if p.Version != "" && m.Version != p.Version {
-			return fmt.Errorf("new binary has %s %s, expected %s", m.Path, m.Version, p.Version)
+			return v, fmt.Errorf("new binary has %s %s, expected %s", m.Path, m.Version, p.Version)
 		}
 	}
 
 	if err := insp.Validate(ctx, bin, normalizeConfig(liveConfig)); err != nil {
-		return fmt.Errorf("current config does not load on the new binary: %w", err)
+		return v, fmt.Errorf("current config does not load on the new binary: %w", err)
 	}
-	return nil
+	return v, nil
 }
 
 // normalizeConfig turns the empty config of a fresh Caddy (no body or a
