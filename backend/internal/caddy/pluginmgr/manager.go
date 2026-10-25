@@ -78,9 +78,12 @@ type Operation struct {
 	Step    OpStep `json:"step"`
 	Error   string `json:"error,omitempty"`
 	// CaddyVersion is the Caddy version the downloaded binary reports.
-	CaddyVersion string    `json:"caddyVersion,omitempty"`
-	StartedAt    time.Time `json:"startedAt"`
-	FinishedAt   time.Time `json:"finishedAt,omitzero"`
+	CaddyVersion string `json:"caddyVersion,omitempty"`
+	// PreviousCaddyVersion is the version of the binary that ran before, so
+	// clients can tell when the build service also updated Caddy.
+	PreviousCaddyVersion string    `json:"previousCaddyVersion,omitempty"`
+	StartedAt            time.Time `json:"startedAt"`
+	FinishedAt           time.Time `json:"finishedAt,omitzero"`
 }
 
 // Manager changes the plugin set of the managed Caddy binary: it downloads a
@@ -275,6 +278,14 @@ func (m *Manager) setCaddyVersion(id, v string) {
 	}
 }
 
+func (m *Manager) setPreviousCaddyVersion(id, v string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if op, ok := m.ops[id]; ok {
+		op.PreviousCaddyVersion = v
+	}
+}
+
 func (m *Manager) run(id string, kind OpKind, pkg string) {
 	step, switched, err := m.execute(context.Background(), id, kind, pkg)
 	if err != nil {
@@ -317,6 +328,13 @@ func (m *Manager) execute(ctx context.Context, id string, kind OpKind, pkg strin
 	if err != nil {
 		return StepFailed, false, fmt.Errorf("reading the Caddy version: %w", err)
 	}
+	previous := version
+	if versionBin != active {
+		if previous, err = m.Inspect.Version(ctx, active); err != nil {
+			return StepFailed, false, fmt.Errorf("reading the Caddy version: %w", err)
+		}
+	}
+	m.setPreviousCaddyVersion(id, previous)
 	pkgs, err := requestedPackages(kind, pkg, installed, m.loadRequested())
 	if err != nil {
 		return StepFailed, false, err
