@@ -21,6 +21,9 @@ fi
 supervise="$(printf %s "${CPM_CADDY_SUPERVISE:-}" | tr '[:upper:]' '[:lower:]')"
 mode="$(printf %s "${CPM_CADDY_MODE:-api}" | tr '[:upper:]' '[:lower:]')"
 if [ "$supervise" = "true" ] && [ "$mode" = "api" ]; then
+  # The supervised Caddy starts with CPM_CADDY_CONFIGFILE; point it at the
+  # config seeded above so a custom CADDY_CONFIG keeps working.
+  export CPM_CADDY_CONFIGFILE="$CADDY_CONFIG"
   echo "Starting Caddy Proxy Manager (supervising Caddy)…"
   exec /usr/local/bin/cpm
 fi
