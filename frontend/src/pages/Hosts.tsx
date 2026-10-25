@@ -20,8 +20,10 @@ export function HostsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Host | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // null when the DNS provider API is unavailable (Caddyfile mode).
-  const [dnsProviders, setDnsProviders] = useState<DNSProvider[] | null>(null);
+  // undefined while loading, null in Caddyfile mode (the API answers 400).
+  const [dnsProviders, setDnsProviders] = useState<
+    DNSProvider[] | null | undefined
+  >(undefined);
 
   const loadHosts = useCallback(async () => {
     setLoading(true);
@@ -43,7 +45,15 @@ export function HostsPage() {
     api
       .get<ApiEnvelope<DNSProvider[]>>("/caddy/dns-providers")
       .then((res) => setDnsProviders(unwrap(res.data) ?? []))
-      .catch(() => setDnsProviders(null));
+      .catch((err) => {
+        if (err?.response?.status === 400) {
+          setDnsProviders(null);
+        } else {
+          // Not Caddyfile mode: keep the select usable without providers.
+          setDnsProviders([]);
+          toast.error("Failed to load DNS providers");
+        }
+      });
   }, []);
 
   const openCreate = () => {
@@ -183,7 +193,7 @@ export function HostsPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         host={editing}
-        dnsProviders={dnsProviders}
+        dnsProviders={dnsProviders === undefined ? [] : dnsProviders}
         submitting={submitting}
         onSubmit={saveHost}
       />
