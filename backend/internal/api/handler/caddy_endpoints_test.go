@@ -17,7 +17,7 @@ func TestGetCaddySchemas(t *testing.T) {
 	rec := doRequest(h.GetCaddySchemas(), http.MethodGet, "/caddy/schemas", nil, nil)
 	var schemas []schema.Schema
 	decodeResult(t, rec, &schemas)
-	// Only global-scope schemas (cloudflare) should appear.
+	// Only global-scope schemas should appear.
 	for _, s := range schemas {
 		found := false
 		for _, sc := range s.Scopes {

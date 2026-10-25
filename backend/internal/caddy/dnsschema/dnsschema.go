@@ -65,17 +65,23 @@ func humanize(s string) string {
 	return strings.Join(words, " ")
 }
 
-// fieldType picks Secret for keys that look like credentials, else the given
-// type when it is a plain string.
-func fieldType(key string, t schema.FieldType) schema.FieldType {
-	if t != schema.FieldString {
-		return t
-	}
+// IsSecretKey reports whether a config key looks like a credential: it contains
+// "token", "secret", "password" or "key" (case-insensitive).
+func IsSecretKey(key string) bool {
 	lower := strings.ToLower(key)
 	for _, hint := range []string{"token", "secret", "password", "key"} {
 		if strings.Contains(lower, hint) {
-			return schema.FieldSecret
+			return true
 		}
+	}
+	return false
+}
+
+// fieldType picks Secret for keys that look like credentials, else the given
+// type when it is a plain string.
+func fieldType(key string, t schema.FieldType) schema.FieldType {
+	if t == schema.FieldString && IsSecretKey(key) {
+		return schema.FieldSecret
 	}
 	return t
 }

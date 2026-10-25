@@ -118,9 +118,9 @@ func TestSetHostPluginRejectsNonHostScoped(t *testing.T) {
 	h := newTestHandler(t)
 	seedHost(t, h)
 
-	// cloudflare is global-scoped, not allowed per host.
+	// test.global is global-scoped, not allowed per host.
 	body := map[string]any{
-		"moduleId": "dns.providers.cloudflare",
+		"moduleId": "test.global",
 		"values":   map[string]any{"api_token": "x"},
 	}
 	rec := doRequest(h.SetHostPlugin(), http.MethodPut, "/hosts/1/plugins", body,

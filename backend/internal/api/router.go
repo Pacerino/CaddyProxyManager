@@ -58,6 +58,15 @@ func generateRoutes(r chi.Router, h *handler.Handler) chi.Router {
 			r.Get("/host-schemas", h.GetHostScopedSchemas()) // Host-scope config schemas
 			r.Get("/config", h.GetCaddyConfig())             // Read live caddy config (api mode)
 
+			r.Get("/dns-provider-types", h.GetDNSProviderTypes()) // DNS provider modules with their config fields
+
+			r.Route("/dns-providers", func(r chi.Router) {
+				r.Get("/", h.GetDNSProviders())                 // List stored DNS provider credentials
+				r.Post("/", h.CreateDNSProvider())              // Create a credential
+				r.Put("/{id:[0-9]+}", h.UpdateDNSProvider())    // Update a credential
+				r.Delete("/{id:[0-9]+}", h.DeleteDNSProvider()) // Delete a credential
+			})
+
 			r.Route("/module-configs", func(r chi.Router) {
 				r.Get("/", h.GetModuleConfigs())                 // List stored module configs
 				r.Put("/", h.SetModuleConfig())                  // Create/update + apply a module config

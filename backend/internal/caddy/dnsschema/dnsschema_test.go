@@ -228,15 +228,30 @@ func TestResolver_MissingSchemaFile(t *testing.T) {
 }
 
 func TestResolver_RegisteredSchemaOverrides(t *testing.T) {
-	r := &Resolver{ListModules: fakeModules}
+	r := &Resolver{
+		ListModules: fakeModules,
+		override: func(id string) (*schema.Schema, bool) {
+			if id == "dns.providers.cloudflare" {
+				return &schema.Schema{ModuleID: id, Title: "Registered", Fields: []schema.Field{{Key: "api_token", Type: schema.FieldSecret}}}, true
+			}
+			return nil, false
+		},
+	}
 	providers, err := r.Providers(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, p := range providers {
-		if p.ModuleID == "dns.providers.cloudflare" && p.Source != SourceOverride {
-			t.Errorf("cloudflare source %q, want override", p.Source)
+		if p.ModuleID == "dns.providers.cloudflare" {
+			found = true
+			if p.Source != SourceOverride {
+				t.Errorf("cloudflare source %q, want override", p.Source)
+			}
 		}
+	}
+	if !found {
+		t.Fatal("cloudflare missing from providers")
 	}
 }
 
