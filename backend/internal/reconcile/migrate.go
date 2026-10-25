@@ -18,12 +18,12 @@ const legacyCloudflareModule = "dns.providers.cloudflare"
 // deleted. Returns whether a migration happened.
 func MigrateLegacyCloudflare(db *gorm.DB) (bool, error) {
 	var mc database.ModuleConfig
-	err := db.Where("module_id = ?", legacyCloudflareModule).First(&mc).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+	res := db.Where("module_id = ?", legacyCloudflareModule).Limit(1).Find(&mc)
+	if res.Error != nil {
+		return false, res.Error
 	}
-	if err != nil {
-		return false, err
+	if res.RowsAffected == 0 {
+		return false, nil
 	}
 
 	token, err := legacyAPIToken(mc.Config)
