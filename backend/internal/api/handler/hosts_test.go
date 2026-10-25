@@ -311,3 +311,110 @@ func TestHost_UnknownProvider400(t *testing.T) {
 		t.Errorf("host persisted despite 400")
 	}
 }
+
+func TestHost_WildcardDomainWritesPolicy(t *testing.T) {
+	h, fake := newDNSTestHandler(t)
+	p := createDNSProvider(t, h, "prod", cloudflareID, map[string]any{"api_token": "s3cret"})
+
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("*.example.com", &p.ID), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body.String())
+	}
+	drainJobQueue(t)
+
+	policies := fake.Policies()
+	if len(policies) != 1 {
+		t.Fatalf("policies = %v", policies)
+	}
+	subjects, _ := policies[0]["subjects"].([]any)
+	if len(subjects) != 1 || subjects[0] != "*.example.com" {
+		t.Errorf("subjects = %v", subjects)
+	}
+}
+
+func useCaddyfileMode(t *testing.T) {
+	t.Helper()
+	prev := config.Configuration.Caddy.Mode
+	config.Configuration.Caddy.Mode = "caddyfile"
+	t.Cleanup(func() { config.Configuration.Caddy.Mode = prev })
+}
+
+func TestHost_CaddyfileModeKeepsStoredProvider(t *testing.T) {
+	h := newTestHandler(t)
+	p := database.DNSProvider{Name: "prod", ModuleID: "dns.providers.cloudflare", Config: database.JSON(`{"api_token":"x"}`)}
+	if err := h.DB.Create(&p).Error; err != nil {
+		t.Fatal(err)
+	}
+	host := database.Host{Domains: "a.example.com", DNSProviderID: &p.ID, Upstreams: []database.Upstream{{Backend: "127.0.0.1:8080"}}}
+	if err := h.DB.Create(&host).Error; err != nil {
+		t.Fatal(err)
+	}
+	useCaddyfileMode(t)
+	startJobQueue(t)
+
+	// Unchanged stored provider: the edit goes through and keeps the value.
+	body := createHostBody("b.example.com", &p.ID)
+	body["ID"] = host.ID
+	rec := doRequest(h.UpdateHost(), http.MethodPut, "/hosts", body, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unchanged: want 200, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	drainJobQueue(t)
+	var got database.Host
+	if err := h.DB.First(&got, host.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.DNSProviderID == nil || *got.DNSProviderID != p.ID || got.Domains != "b.example.com" {
+		t.Errorf("stored host = %+v", got)
+	}
+
+	// Changing or clearing it is rejected.
+	other := p.ID + 1
+	for _, pid := range []*uint{&other, nil} {
+		body := createHostBody("b.example.com", pid)
+		body["ID"] = host.ID
+		rec := doRequest(h.UpdateHost(), http.MethodPut, "/hosts", body, nil)
+		if pid != nil && rec.Code != http.StatusBadRequest {
+			t.Errorf("change: want 400, got %d (%s)", rec.Code, rec.Body.String())
+		}
+		if pid == nil && rec.Code != http.StatusBadRequest {
+			t.Errorf("clear: want 400, got %d (%s)", rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestHost_ClearingProviderRemovesPolicy(t *testing.T) {
+	h, fake := newDNSTestHandler(t)
+	p := createDNSProvider(t, h, "prod", cloudflareID, map[string]any{"api_token": "s3cret"})
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("a.example.com", &p.ID), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: status %d (%s)", rec.Code, rec.Body.String())
+	}
+	var host database.Host
+	decodeResult(t, rec, &host)
+	drainJobQueue(t)
+	if len(fake.Policies()) != 1 {
+		t.Fatalf("want 1 policy before clearing, got %v", fake.Policies())
+	}
+
+	body := createHostBody("a.example.com", nil)
+	body["ID"] = host.ID
+	rec = doRequest(h.UpdateHost(), http.MethodPut, "/hosts", body, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: status %d (%s)", rec.Code, rec.Body.String())
+	}
+	drainJobQueue(t)
+
+	var got database.Host
+	if err := h.DB.First(&got, host.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.DNSProviderID != nil {
+		t.Errorf("provider not cleared in DB: %v", *got.DNSProviderID)
+	}
+	for _, pol := range fake.Policies() {
+		if pol["@id"] == fmt.Sprintf("cpm_tls_host_%d", host.ID) {
+			t.Fatalf("policy still present: %v", fake.Policies())
+		}
+	}
+}

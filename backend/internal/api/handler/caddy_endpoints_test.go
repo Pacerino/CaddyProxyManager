@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/Pacerino/CaddyProxyManager/internal/caddy/schema"
@@ -60,6 +62,63 @@ func TestGetCaddyConfig(t *testing.T) {
 	rec := doRequest(h.GetCaddyConfig(), http.MethodGet, "/caddy/config", nil, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetCaddyConfigRedactsDNSCredentials(t *testing.T) {
+	h, fake := newDNSTestHandler(t)
+	fake.mu.Lock()
+	fake.tls, fake.auto = true, true
+	fake.policies = []any{map[string]any{
+		"subjects": []any{"a.example.com"},
+		"issuers": []any{map[string]any{
+			"module": "acme",
+			"challenges": map[string]any{"dns": map[string]any{
+				"provider": map[string]any{"name": "cloudflare", "api_token": "tok-SECRET"},
+			}},
+		}},
+	}}
+	fake.mu.Unlock()
+
+	for _, path := range []string{"apps/tls/automation/policies", ""} {
+		rec := doRequest(h.GetCaddyConfig(), http.MethodGet, "/caddy/config?path="+path, nil, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("path %q: status %d (%s)", path, rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if strings.Contains(body, "tok-SECRET") {
+			t.Errorf("path %q: token leaked: %s", path, body)
+		}
+		if path != "" && (!strings.Contains(body, `"name":"cloudflare"`) || !strings.Contains(body, "********") || !strings.Contains(body, "a.example.com")) {
+			t.Errorf("path %q: unexpected body %s", path, body)
+		}
+	}
+}
+
+func TestRedactDNSProviders(t *testing.T) {
+	in := `{"apps":{"tls":{"automation":{"policies":[{"issuers":[{"challenges":{"dns":{"provider":{"name":"x","api_key":"k","nested":{"a":1}},"ttl":5}}}]}]}}}}`
+	out, err := redactDNSProviders("", json.RawMessage(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"apps":{"tls":{"automation":{"policies":[{"issuers":[{"challenges":{"dns":{"provider":{"api_key":"********","name":"x","nested":"********"},"ttl":5}}}]}]}}}}`
+	if string(out) != want {
+		t.Errorf("got  %s\nwant %s", out, want)
+	}
+	// Sub-paths pointing at the dns or provider object itself.
+	for _, c := range []struct{ path, in, want string }{
+		{"apps/tls/automation/policies/0/issuers/0/challenges/dns", `{"provider":{"name":"x","k":"v"}}`, `{"provider":{"k":"********","name":"x"}}`},
+		{"apps/tls/automation/policies/0/issuers/0/challenges/dns/provider", `{"name":"x","k":"v"}`, `{"k":"********","name":"x"}`},
+	} {
+		out, err := redactDNSProviders(c.path, json.RawMessage(c.in))
+		if err != nil || string(out) != c.want {
+			t.Errorf("%s: got %s, %v; want %s", c.path, out, err, c.want)
+		}
+	}
+	// Unrelated config is returned untouched.
+	plain := json.RawMessage(`{"listen":[":80"]}`)
+	if out, _ := redactDNSProviders("apps/http", plain); string(out) != string(plain) {
+		t.Errorf("plain changed: %s", out)
 	}
 }
 
