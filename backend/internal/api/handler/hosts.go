@@ -227,10 +227,22 @@ func (s Handler) checkHostDNSProvider(w http.ResponseWriter, r *http.Request, ho
 		h.ResultErrorJSON(w, r, http.StatusBadRequest, msg, nil)
 		return false
 	}
-	if host.DNSProviderID != nil {
-		if !apiMode() {
+	if !apiMode() {
+		// Stored selections are kept but ignored outside API mode, so an edit
+		// may resubmit the stored value; only setting or changing one is rejected.
+		var stored *uint
+		if host.ID != 0 {
+			var existing database.Host
+			if err := s.DB.Select("id", "dns_provider_id").Limit(1).Find(&existing, host.ID).Error; err != nil {
+				return fail(err.Error())
+			}
+			stored = existing.DNSProviderID
+		}
+		if !sameProvider(host.DNSProviderID, stored) {
 			return fail("DNS providers are only available when CPM_CADDY_MODE=api")
 		}
+	}
+	if host.DNSProviderID != nil && apiMode() {
 		var p database.DNSProvider
 		if err := s.DB.First(&p, *host.DNSProviderID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
