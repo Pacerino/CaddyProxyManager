@@ -169,3 +169,51 @@ func TestStore_PruneSpellingIndependent(t *testing.T) {
 		}
 	}
 }
+
+func TestStore_ResetWithoutSeedClears(t *testing.T) {
+	s := NewStore(t.TempDir())
+	a, b := put(t, s, "A"), put(t, s, "B")
+	if err := s.Promote(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Promote(b); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Reset(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Current(); ok {
+		t.Fatal("current must be gone")
+	}
+	if _, ok := s.Previous(); ok {
+		t.Fatal("previous must be gone")
+	}
+}
+
+func TestStore_ResetRepromotesSeed(t *testing.T) {
+	s := NewStore(t.TempDir())
+	seed, b, c := put(t, s, "seed"), put(t, s, "B"), put(t, s, "C")
+	if err := s.SetSeed(seed); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{seed, b, c} {
+		if err := s.Promote(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Prune(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(seed); err != nil {
+		t.Fatalf("Prune removed the seed: %v", err)
+	}
+	if err := s.Reset(); err != nil {
+		t.Fatal(err)
+	}
+	if cur, ok := s.Current(); !ok || cur != seed {
+		t.Fatalf("current = %q %v, want seed", cur, ok)
+	}
+	if _, ok := s.Previous(); ok {
+		t.Fatal("previous must be gone")
+	}
+}

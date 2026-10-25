@@ -15,12 +15,16 @@ import (
 const (
 	currentLink  = "current"
 	previousLink = "previous"
-	tmpPrefix    = ".tmp-"
-	binPrefix    = "caddy-"
+	// seedLink marks the copy of the configured Caddy binary that a systemd
+	// unit falls back to; it is never pruned.
+	seedLink  = "seed"
+	tmpPrefix = ".tmp-"
+	binPrefix = "caddy-"
 )
 
 // Store keeps managed Caddy binaries in a directory: content-addressed files
-// named caddy-<sha12> plus "current" and "previous" symlinks.
+// named caddy-<sha12> plus "current" and "previous" symlinks and, for
+// systemd setups, a "seed" symlink to the copy of the configured binary.
 type Store struct {
 	Dir string
 }
@@ -96,6 +100,17 @@ func (s *Store) Current() (string, bool) { return s.resolve(currentLink) }
 // Previous returns the binary the "previous" symlink points at.
 func (s *Store) Previous() (string, bool) { return s.resolve(previousLink) }
 
+// Seed returns the binary the "seed" symlink points at.
+func (s *Store) Seed() (string, bool) { return s.resolve(seedLink) }
+
+// SetSeed marks path as the seed binary.
+func (s *Store) SetSeed(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+	return s.setLink(seedLink, path)
+}
+
 // setLink atomically points the named symlink at the binary target: it creates
 // a temp symlink in the same directory and renames it over the destination.
 // The link target is the base name, so it resolves relative to the link's own
@@ -159,8 +174,23 @@ func (s *Store) Clear() error {
 	return nil
 }
 
-// Prune deletes temp files and every caddy-* binary that is neither current
-// nor previous.
+// Reset returns to the binary Caddy ran before CPM managed it: the seed
+// becomes current again when there is one (a systemd unit always runs
+// "current", so it must not vanish); otherwise both links are removed and
+// the shipped binary is active. "previous" is dropped either way.
+func (s *Store) Reset() error {
+	seed, ok := s.Seed()
+	if !ok {
+		return s.Clear()
+	}
+	if err := s.setLink(currentLink, seed); err != nil {
+		return err
+	}
+	return removeIfExists(filepath.Join(s.Dir, previousLink))
+}
+
+// Prune deletes temp files and every caddy-* binary that is neither current,
+// previous nor the seed.
 func (s *Store) Prune() error {
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
@@ -174,6 +204,9 @@ func (s *Store) Prune() error {
 		keep[filepath.Base(p)] = true
 	}
 	if p, ok := s.Previous(); ok {
+		keep[filepath.Base(p)] = true
+	}
+	if p, ok := s.Seed(); ok {
 		keep[filepath.Base(p)] = true
 	}
 	for _, e := range entries {

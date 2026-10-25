@@ -16,7 +16,8 @@ import (
 // switchTo makes path the live binary. If Caddy doesn't come up or the
 // reconcile reports errors, it rolls back to the previous binary (the
 // shipped one for the first managed build); if that fails too, it falls
-// back to the shipped binary.
+// back to the shipped binary. On systemd "the shipped binary" is the seed
+// copy (Store.Reset), so the unit's ExecStart never disappears.
 func (m *Manager) switchTo(ctx context.Context, id, path, sum string) (OpStep, bool, error) {
 	_, hadCurrent := m.Store.Current()
 	m.setStep(id, StepRestarting)
@@ -42,7 +43,7 @@ func (m *Manager) switchTo(ctx context.Context, id, path, sum string) (OpStep, b
 	if hadCurrent {
 		rbErr = m.Store.RollBack()
 	} else {
-		rbErr = m.Store.Clear()
+		rbErr = m.Store.Reset()
 	}
 	if rbErr == nil {
 		rbErr = m.restartAndWait(ctx)
@@ -61,7 +62,7 @@ func (m *Manager) switchTo(ctx context.Context, id, path, sum string) (OpStep, b
 		return StepFailed, true, fmt.Errorf("%w; rollback to the shipped binary failed: %v", switchErr, rbErr)
 	}
 	m.setStep(id, StepRestarting)
-	shipErr := m.Store.Clear()
+	shipErr := m.Store.Reset()
 	if shipErr == nil {
 		shipErr = m.restartAndWait(ctx)
 	}

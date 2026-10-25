@@ -52,10 +52,13 @@ func main() {
 			sup = startSupervisor(db, p)
 		}
 		mgr := newPluginManager(db, p, sup, h)
+		setup := func(ctx context.Context) pluginmgr.SetupStatus { return detectSetup(ctx, mgr) }
 		h.Plugins = mgr
-		h.PluginSetup = detectSetup
+		h.PluginSetup = setup
+		// Seed the managed binary for a systemd unit before anyone sees the drop-in.
+		setup(context.Background())
 		startReconcile(db, p, func(ctx context.Context) {
-			if !config.Configuration.PluginInstall || !detectSetup(ctx).Switchable() {
+			if !config.Configuration.PluginInstall || !setup(ctx).Switchable() {
 				return
 			}
 			mgr.AutoUpdateOnStartup(ctx, db)
@@ -88,14 +91,29 @@ func managedBinaryPath() string {
 }
 
 // detectSetup reports whether Caddy can be restarted on a managed binary.
-func detectSetup(ctx context.Context) pluginmgr.SetupStatus {
+// When a systemd unit needs the drop-in and plugin install is on, the managed
+// binary is seeded first (a copy of the configured one), so the drop-in
+// points at a file that exists.
+func detectSetup(ctx context.Context, mgr *pluginmgr.Manager) pluginmgr.SetupStatus {
 	c := config.Configuration.Caddy
-	return pluginmgr.DetectSetup(ctx, pluginmgr.SetupConfig{
+	cfg := pluginmgr.SetupConfig{
 		Supervise:      c.Supervise,
 		ReloadStrategy: c.ReloadStrategy,
 		Service:        c.Service,
 		ManagedPath:    managedBinaryPath(),
-	}, pluginmgr.DBusUnit{})
+	}
+	st := pluginmgr.DetectSetup(ctx, cfg, pluginmgr.DBusUnit{})
+	if st.State != pluginmgr.SetupNeeded || !config.Configuration.PluginInstall {
+		return st
+	}
+	if _, ok := mgr.Store.Current(); ok {
+		return st
+	}
+	if err := mgr.EnsureSeeded(); err != nil {
+		logger.Warn("Seeding the managed Caddy binary: %v", err)
+		return st
+	}
+	return pluginmgr.DetectSetup(ctx, cfg, pluginmgr.DBusUnit{})
 }
 
 // startSupervisor runs Caddy as a child process. After a crash-restart the

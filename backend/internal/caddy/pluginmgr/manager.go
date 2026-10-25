@@ -380,6 +380,9 @@ func (m *Manager) discard(path string) {
 	if p, ok := m.Store.Previous(); ok && p == path {
 		return
 	}
+	if p, ok := m.Store.Seed(); ok && p == path {
+		return
+	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		logger.Warn("Removing rejected Caddy binary %s: %v", path, err)
 	}
