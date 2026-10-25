@@ -25,6 +25,9 @@ const (
 	OpAdd    OpKind = "add"
 	OpRemove OpKind = "remove"
 	OpUpdate OpKind = "update"
+	// OpFallback records that CPM switched back to the shipped binary because
+	// the managed one could not run; it is never started by a request.
+	OpFallback OpKind = "fallback"
 )
 
 // OpStep is the progress of a plugin operation. Done, RolledBack and Failed
@@ -167,11 +170,11 @@ func (m *Manager) Start(kind OpKind, pkg string) (*Operation, error) {
 		return nil, fmt.Errorf("unknown operation %q", kind)
 	}
 
-	var rnd [8]byte
-	if _, err := rand.Read(rnd[:]); err != nil {
+	id, err := newOpID()
+	if err != nil {
 		return nil, err
 	}
-	op := &Operation{ID: hex.EncodeToString(rnd[:]), Kind: kind, Package: pkg, Step: StepRequesting, StartedAt: time.Now()}
+	op := &Operation{ID: id, Kind: kind, Package: pkg, Step: StepRequesting, StartedAt: time.Now()}
 
 	m.mu.Lock()
 	if m.busy {
@@ -179,6 +182,24 @@ func (m *Manager) Start(kind OpKind, pkg string) (*Operation, error) {
 		return nil, ErrBusy
 	}
 	m.busy = true
+	m.addOpLocked(op)
+	snapshot := *op
+	m.mu.Unlock()
+
+	go m.run(op.ID, kind, pkg)
+	return &snapshot, nil
+}
+
+func newOpID() (string, error) {
+	var rnd [8]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(rnd[:]), nil
+}
+
+// addOpLocked records op, keeping the last maxOperations. Caller holds m.mu.
+func (m *Manager) addOpLocked(op *Operation) {
 	if m.ops == nil {
 		m.ops = map[string]*Operation{}
 	}
@@ -188,11 +209,6 @@ func (m *Manager) Start(kind OpKind, pkg string) (*Operation, error) {
 		delete(m.ops, m.order[0])
 		m.order = m.order[1:]
 	}
-	snapshot := *op
-	m.mu.Unlock()
-
-	go m.run(op.ID, kind, pkg)
-	return &snapshot, nil
 }
 
 // Get returns a copy of a recent operation.

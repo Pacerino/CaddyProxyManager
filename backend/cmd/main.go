@@ -49,9 +49,16 @@ func main() {
 		db := database.GetInstance()
 		p := caddy.NewAPIProvider()
 		if config.Configuration.Caddy.Supervise {
-			sup = startSupervisor(db, p)
+			sup = newSupervisor(db, p)
 		}
 		mgr := newPluginManager(db, p, sup, h)
+		if sup != nil {
+			// A managed binary that can't run falls back to the shipped one.
+			sup.Fallback = mgr.FallBackToShipped
+			if err := sup.Start(context.Background()); err != nil {
+				logger.Warn("Starting Caddy: %v", err)
+			}
+		}
 		setup := func(ctx context.Context) pluginmgr.SetupStatus { return detectSetup(ctx, mgr) }
 		h.Plugins = mgr
 		h.PluginSetup = setup
@@ -116,11 +123,11 @@ func detectSetup(ctx context.Context, mgr *pluginmgr.Manager) pluginmgr.SetupSta
 	return pluginmgr.DetectSetup(ctx, cfg, pluginmgr.DBusUnit{})
 }
 
-// startSupervisor runs Caddy as a child process. After a crash-restart the
-// config is re-applied; intentional restarts don't trigger that (the plugin
-// manager reconciles itself).
-func startSupervisor(db *gorm.DB, p *caddy.APIProvider) *supervisor.Supervisor {
-	sup := &supervisor.Supervisor{
+// newSupervisor prepares running Caddy as a child process. After a
+// crash-restart the config is re-applied; intentional restarts don't trigger
+// that (the plugin manager reconciles itself).
+func newSupervisor(db *gorm.DB, p *caddy.APIProvider) *supervisor.Supervisor {
+	return &supervisor.Supervisor{
 		Binary:     caddy.ActiveBinary,
 		ConfigFile: config.CaddyConfigFile(),
 		OnRestart: func() {
@@ -131,10 +138,6 @@ func startSupervisor(db *gorm.DB, p *caddy.APIProvider) *supervisor.Supervisor {
 			}()
 		},
 	}
-	if err := sup.Start(context.Background()); err != nil {
-		logger.Warn("Starting Caddy: %v", err)
-	}
-	return sup
 }
 
 // newPluginManager builds the plugin manager. A supervised Caddy is restarted

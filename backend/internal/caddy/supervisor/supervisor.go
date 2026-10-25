@@ -21,6 +21,12 @@ const (
 	maxBackoff         = 30 * time.Second
 	// A process that stayed up this long resets the crash backoff.
 	healthyUptime = 60 * time.Second
+	// An exit within quickExitWindow of the start counts as a quick exit;
+	// after quickExitLimit of them in a row the supervisor escalates: first
+	// it starts Caddy without --resume, then it asks Fallback for another
+	// binary.
+	quickExitWindow = 10 * time.Second
+	quickExitLimit  = 3
 )
 
 // Supervisor keeps one Caddy child process running.
@@ -36,6 +42,11 @@ type Supervisor struct {
 	Backoff func(attempt int) time.Duration
 	// TermTimeout is how long Restart/Stop wait after SIGTERM before SIGKILL (default 10s).
 	TermTimeout time.Duration
+	// Fallback, if set, is called with the reason when Binary() cannot be
+	// started, or keeps exiting right after starting even without --resume.
+	// It returns true when it switched Binary() to another binary, which is
+	// then started right away.
+	Fallback func(reason string) bool
 
 	// stdout and stderr receive Caddy's output; nil means CPM's own.
 	stdout, stderr io.Writer
@@ -43,6 +54,10 @@ type Supervisor struct {
 
 	mu  sync.Mutex
 	cur *proc
+	// quickExits counts unexpected quick exits in a row; noResume drops
+	// --resume until Caddy ran for a while or is restarted on purpose.
+	quickExits int
+	noResume   bool
 }
 
 // RecentLogs returns Caddy's most recent output lines (stdout and stderr),
@@ -93,7 +108,11 @@ func (s *Supervisor) termTimeout() time.Duration {
 
 // spawn starts a child and its watcher. Caller holds s.mu.
 func (s *Supervisor) spawn(attempt int) error {
-	cmd := exec.Command(s.Binary(), "run", "--resume", "--config", s.ConfigFile)
+	args := []string{"run", "--resume", "--config", s.ConfigFile}
+	if s.noResume {
+		args = []string{"run", "--config", s.ConfigFile}
+	}
+	cmd := exec.Command(s.Binary(), args...)
 	cmd.Env = append(os.Environ(), s.Env...)
 	stdout := &lineWriter{out: orStd(s.stdout, os.Stdout), ring: &s.logs}
 	stderr := &lineWriter{out: orStd(s.stderr, os.Stderr), ring: &s.logs}
@@ -119,11 +138,51 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.cur != nil && !s.cur.canceled {
+		s.mu.Unlock()
 		return errors.New("supervisor: already started")
 	}
+	err := s.spawn(0)
+	s.mu.Unlock()
+	if err == nil || !s.fallBack(fmt.Sprintf("starting Caddy: %v", err)) {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.spawn(0)
+}
+
+// fallBack asks Fallback for another binary and reports whether it switched.
+// It must be called without s.mu held.
+func (s *Supervisor) fallBack(reason string) bool {
+	if s.Fallback == nil || !s.Fallback(reason) {
+		return false
+	}
+	s.mu.Lock()
+	s.quickExits, s.noResume = 0, false
+	s.mu.Unlock()
+	return true
+}
+
+// noteExit records an unexpected exit after uptime and reports whether the
+// quick-exit limit was reached, and if so whether --resume was already off
+// (time to fall back). Caller holds s.mu.
+func (s *Supervisor) noteExit(uptime time.Duration) (escalate, fallback bool) {
+	if uptime >= quickExitWindow {
+		s.quickExits, s.noResume = 0, false
+		return false, false
+	}
+	s.quickExits++
+	if s.quickExits < quickExitLimit {
+		return false, false
+	}
+	s.quickExits = 0
+	if !s.noResume {
+		s.noResume = true
+		return true, false
+	}
+	s.noResume = false
+	return true, true
 }
 
 // cancelCurrent marks the current proc intentional and terminates it, waiting
@@ -163,6 +222,7 @@ func (s *Supervisor) Restart(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cancelCurrent()
+	s.quickExits, s.noResume = 0, false
 	if err := s.spawn(0); err != nil {
 		return fmt.Errorf("supervisor: restart: %w", err)
 	}
@@ -178,10 +238,29 @@ func (s *Supervisor) Stop() error {
 }
 
 // handleExit runs in the watcher goroutine after p exited. It restarts Caddy
-// unless the exit was intentional, retrying failed starts with backoff.
+// unless the exit was intentional, retrying failed starts with backoff. When
+// Caddy keeps exiting right after starting it retries without --resume (an
+// autosave the binary can't load), then asks Fallback for another binary;
+// a binary that can't be started at all goes to Fallback right away.
 func (s *Supervisor) handleExit(p *proc, attempt int) {
-	if time.Since(p.started) >= healthyUptime {
+	uptime := time.Since(p.started)
+	if uptime >= healthyUptime {
 		attempt = 0
+	}
+	s.mu.Lock()
+	if p.canceled {
+		s.mu.Unlock()
+		return
+	}
+	escalate, fallback := s.noteExit(uptime)
+	s.mu.Unlock()
+	if escalate {
+		attempt = 0
+		if !fallback {
+			logger.Warn("caddy exited right after starting %d times in a row; starting it without --resume", quickExitLimit)
+		} else if s.fallBack(fmt.Sprintf("Caddy exited right after starting %d times in a row, also without --resume", quickExitLimit)) {
+			logger.Warn("caddy keeps exiting right after starting; switched to the fallback binary")
+		}
 	}
 	for {
 		s.mu.Lock()
@@ -214,6 +293,10 @@ func (s *Supervisor) handleExit(p *proc, attempt int) {
 			return
 		}
 		logger.Warn("restarting caddy: %v", err)
+		if s.fallBack(fmt.Sprintf("starting Caddy: %v", err)) {
+			attempt = 0
+			continue
+		}
 		attempt++
 	}
 }
