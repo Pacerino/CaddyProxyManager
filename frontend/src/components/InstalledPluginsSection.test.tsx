@@ -66,6 +66,21 @@ describe("AddPluginDialog", () => {
     expect(post).toHaveBeenCalledWith("/caddy/plugins", { path: "github.com/b/untested" });
   });
 
+  it("links each catalog entry to its repository", async () => {
+    mockGet(baseState, [
+      { path: "github.com/c/linked", repo: "https://github.com/c/linked", modules: ["c.mod"], tested: false, installed: false },
+      { path: "github.com/d/norepo", repo: "", modules: ["d.mod"], tested: false, installed: false },
+    ]);
+    render(<AddPluginDialog open onOpenChange={() => {}} onStarted={() => {}} />);
+    await screen.findByText("github.com/c/linked");
+    const links = screen.getAllByRole("link", { name: /repository/i });
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute("href")).toBe("https://github.com/c/linked");
+    expect(links[0].getAttribute("target")).toBe("_blank");
+    // The link must not be nested inside the selectable row button.
+    expect(links[0].closest("button")).toBeNull();
+  });
+
   it("says that Caddy itself may be updated", async () => {
     mockGet(baseState, catalog);
     render(<AddPluginDialog open onOpenChange={() => {}} onStarted={() => {}} />);

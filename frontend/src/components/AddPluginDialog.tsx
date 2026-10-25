@@ -126,19 +126,22 @@ export function AddPluginDialog({ open, onOpenChange, onStarted }: Props) {
           ) : (
             <ul>
               {results.map((p) => (
-                <li key={p.path}>
+                <li
+                  key={p.path}
+                  className={`flex items-start gap-2 hover:bg-muted/60 ${
+                    selected?.path === p.path ? "bg-muted" : ""
+                  }`}
+                >
                   <button
                     type="button"
                     disabled={p.installed}
                     aria-pressed={selected?.path === p.path}
                     onClick={() => setSelected(p)}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-muted/60 disabled:opacity-50 ${
-                      selected?.path === p.path ? "bg-muted" : ""
-                    }`}
+                    className="min-w-0 flex-1 px-3 py-2 text-left text-sm disabled:opacity-50"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{p.path}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="break-all font-medium">{p.path}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
                         {p.installed ? "Installed" : p.tested ? "✔ Tested" : "⚠ Untested"}
                       </span>
                     </div>
@@ -146,6 +149,18 @@ export function AddPluginDialog({ open, onOpenChange, onStarted }: Props) {
                       {p.modules.join(", ")}
                     </div>
                   </button>
+                  {p.repo && (
+                    // Kept outside the row button: links can't nest in buttons.
+                    <a
+                      href={p.repo}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Repository of ${p.path}`}
+                      className="shrink-0 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      Repository
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
