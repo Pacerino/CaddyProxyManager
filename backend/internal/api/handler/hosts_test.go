@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/Pacerino/CaddyProxyManager/internal/config"
 	"github.com/Pacerino/CaddyProxyManager/internal/database"
 )
 
@@ -168,5 +171,143 @@ func TestDeleteHost(t *testing.T) {
 	h.DB.Model(&database.Host{}).Count(&count)
 	if count != 0 {
 		t.Fatalf("expected host deleted, count=%d", count)
+	}
+}
+
+func createHostBody(domains string, providerID *uint) map[string]any {
+	body := map[string]any{
+		"domains":   domains,
+		"Upstreams": []map[string]any{{"backend": "127.0.0.1:8080"}},
+	}
+	if providerID != nil {
+		body["dnsProviderId"] = *providerID
+	}
+	return body
+}
+
+func TestCreateHost_WithProviderWritesPolicy(t *testing.T) {
+	h, fake := newDNSTestHandler(t)
+	p := createDNSProvider(t, h, "prod", cloudflareID, map[string]any{"api_token": "s3cret"})
+
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("a.example.com b.example.com", &p.ID), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body.String())
+	}
+	drainJobQueue(t)
+
+	var host database.Host
+	decodeResult(t, rec, &host)
+	policies := fake.Policies()
+	if len(policies) != 1 || policies[0]["@id"] != fmt.Sprintf("cpm_tls_host_%d", host.ID) {
+		t.Fatalf("policies = %v", policies)
+	}
+}
+
+func TestDeleteHost_RemovesPolicy(t *testing.T) {
+	h, fake := newDNSTestHandler(t)
+	p := createDNSProvider(t, h, "prod", cloudflareID, map[string]any{"api_token": "s3cret"})
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("a.example.com", &p.ID), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: status %d (%s)", rec.Code, rec.Body.String())
+	}
+	var host database.Host
+	decodeResult(t, rec, &host)
+	drainJobQueue(t)
+	if len(fake.Policies()) != 1 {
+		t.Fatalf("want 1 policy before delete, got %v", fake.Policies())
+	}
+
+	id := fmt.Sprint(host.ID)
+	rec = doRequest(h.DeleteHost(), http.MethodDelete, "/hosts/"+id, nil, map[string]string{"hostID": id})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete: status %d (%s)", rec.Code, rec.Body.String())
+	}
+	drainJobQueue(t)
+
+	for _, pol := range fake.Policies() {
+		if pol["@id"] == "cpm_tls_host_"+id {
+			t.Fatalf("policy for deleted host still present: %v", fake.Policies())
+		}
+	}
+}
+
+func TestHost_ConflictDifferentProvider400(t *testing.T) {
+	h, _ := newDNSTestHandler(t)
+	p1 := createDNSProvider(t, h, "one", cloudflareID, map[string]any{"api_token": "s3cret"})
+	p2 := createDNSProvider(t, h, "two", porkbunID, map[string]any{"api_key": "s3cret"})
+	first := database.Host{Domains: "a.example.com shared.example.com", DNSProviderID: &p1.ID}
+	if err := h.DB.Create(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Different provider, and nil vs. value, both conflict on create.
+	for _, pid := range []*uint{&p2.ID, nil} {
+		rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("shared.example.com", pid), nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("create: want 400, got %d (%s)", rec.Code, rec.Body.String())
+		}
+		if msg := rec.Body.String(); !strings.Contains(msg, "shared.example.com") || !strings.Contains(msg, fmt.Sprintf("host %d", first.ID)) {
+			t.Errorf("message lacks domain/host id: %s", msg)
+		}
+	}
+
+	// Update of another host onto the domain conflicts too.
+	second := database.Host{Domains: "b.example.com", DNSProviderID: &p2.ID}
+	if err := h.DB.Create(&second).Error; err != nil {
+		t.Fatal(err)
+	}
+	body := createHostBody("shared.example.com", &p2.ID)
+	body["ID"] = second.ID
+	rec := doRequest(h.UpdateHost(), http.MethodPut, "/hosts", body, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("update: want 400, got %d (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHost_SameDomainSameProviderAllowed(t *testing.T) {
+	h, _ := newDNSTestHandler(t)
+	p := createDNSProvider(t, h, "prod", cloudflareID, map[string]any{"api_token": "s3cret"})
+	first := database.Host{Domains: "shared.example.com", DNSProviderID: &p.ID}
+	if err := h.DB.Create(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("shared.example.com", &p.ID), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body.String())
+	}
+	// Updating a host onto its own domains never conflicts with itself.
+	body := createHostBody("shared.example.com", &p.ID)
+	body["ID"] = first.ID
+	rec = doRequest(h.UpdateHost(), http.MethodPut, "/hosts", body, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: status %d (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHost_ProviderInCaddyfileMode400(t *testing.T) {
+	h := newTestHandler(t)
+	prev := config.Configuration.Caddy.Mode
+	config.Configuration.Caddy.Mode = "caddyfile"
+	t.Cleanup(func() { config.Configuration.Caddy.Mode = prev })
+
+	id := uint(1)
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("a.example.com", &id), nil)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "DNS providers are only available when CPM_CADDY_MODE=api") {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHost_UnknownProvider400(t *testing.T) {
+	h, _ := newDNSTestHandler(t)
+	id := uint(999)
+	rec := doRequest(h.CreateHost(), http.MethodPost, "/hosts", createHostBody("a.example.com", &id), nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body.String())
+	}
+	var n int64
+	h.DB.Model(&database.Host{}).Count(&n)
+	if n != 0 {
+		t.Errorf("host persisted despite 400")
 	}
 }

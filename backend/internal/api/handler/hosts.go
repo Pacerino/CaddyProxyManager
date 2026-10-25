@@ -2,10 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	h "github.com/Pacerino/CaddyProxyManager/internal/api/http"
 	"github.com/Pacerino/CaddyProxyManager/internal/caddy"
+	"github.com/Pacerino/CaddyProxyManager/internal/config"
 	"github.com/Pacerino/CaddyProxyManager/internal/database"
 	"github.com/Pacerino/CaddyProxyManager/internal/jobqueue"
 
@@ -59,6 +63,10 @@ func (s Handler) CreateHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		if !s.checkHostDNSProvider(w, r, newHost) {
+			return
+		}
+
 		result := s.DB.Create(&newHost)
 		if result.Error != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, result.Error.Error(), nil)
@@ -77,6 +85,9 @@ func (s Handler) CreateHost() func(http.ResponseWriter, *http.Request) {
 			Action: func() error { return provider.WriteHost(created) },
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+		if !s.enqueueHostSyncTLS(w, r) {
 			return
 		}
 
@@ -99,6 +110,10 @@ func (s Handler) UpdateHost() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		if !s.checkHostDNSProvider(w, r, newHost) {
+			return
+		}
+
 		provider, err := caddy.GetProvider()
 		if err != nil {
 			h.ResultErrorJSON(w, r, http.StatusInternalServerError, err.Error(), nil)
@@ -113,7 +128,7 @@ func (s Handler) UpdateHost() func(http.ResponseWriter, *http.Request) {
 			newHost.Upstreams = nil
 			if err := tx.Model(&database.Host{}).
 				Where("id = ?", newHost.ID).
-				Updates(map[string]any{"domains": newHost.Domains, "matcher": newHost.Matcher}).Error; err != nil {
+				Updates(map[string]any{"domains": newHost.Domains, "matcher": newHost.Matcher, "dns_provider_id": newHost.DNSProviderID}).Error; err != nil {
 				return err
 			}
 			return tx.Model(&newHost).Association("Upstreams").Replace(upstreams)
@@ -135,6 +150,9 @@ func (s Handler) UpdateHost() func(http.ResponseWriter, *http.Request) {
 			Action: func() error { return provider.WriteHost(persisted) },
 		}); err != nil {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+		if !s.enqueueHostSyncTLS(w, r) {
 			return
 		}
 
@@ -174,10 +192,78 @@ func (s Handler) DeleteHost() func(http.ResponseWriter, *http.Request) {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, result.Error.Error(), nil)
 			return
 		}
+		// The sync reads the hosts table, so it is queued after the row is gone.
+		if !s.enqueueHostSyncTLS(w, r) {
+			return
+		}
 		if result.RowsAffected > 0 {
 			h.ResultResponseJSON(w, r, http.StatusOK, true)
 		} else {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, h.ErrIDNotFound.Error(), nil)
 		}
 	}
+}
+
+// apiMode reports whether CPM manages Caddy through the admin API.
+func apiMode() bool {
+	return strings.ToLower(config.Configuration.Caddy.Mode) == "api"
+}
+
+// enqueueHostSyncTLS queues a TLS policy sync after a host change. Caddyfile
+// mode has no TLS policies to manage, so nothing is queued there.
+func (s Handler) enqueueHostSyncTLS(w http.ResponseWriter, r *http.Request) bool {
+	if !apiMode() {
+		return true
+	}
+	return s.enqueueSyncTLS(w, r, caddy.NewAPIProvider())
+}
+
+// checkHostDNSProvider validates the host's DNS provider reference and the
+// domain conflict rule, writing a 400 and returning false on failure. A domain
+// may be listed by several hosts only if they all use the same provider,
+// because Caddy matches one TLS policy per subject.
+func (s Handler) checkHostDNSProvider(w http.ResponseWriter, r *http.Request, host database.Host) bool {
+	fail := func(msg string) bool {
+		h.ResultErrorJSON(w, r, http.StatusBadRequest, msg, nil)
+		return false
+	}
+	if host.DNSProviderID != nil {
+		if !apiMode() {
+			return fail("DNS providers are only available when CPM_CADDY_MODE=api")
+		}
+		var p database.DNSProvider
+		if err := s.DB.First(&p, *host.DNSProviderID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fail(fmt.Sprintf("DNS provider %d does not exist", *host.DNSProviderID))
+			}
+			return fail(err.Error())
+		}
+	}
+
+	var others []database.Host
+	if err := s.DB.Where("id <> ?", host.ID).Find(&others).Error; err != nil {
+		return fail(err.Error())
+	}
+	mine := map[string]bool{}
+	for _, d := range strings.Fields(host.Domains) {
+		mine[d] = true
+	}
+	for _, o := range others {
+		if sameProvider(host.DNSProviderID, o.DNSProviderID) {
+			continue
+		}
+		for _, d := range strings.Fields(o.Domains) {
+			if mine[d] {
+				return fail(fmt.Sprintf("domain %s is already used by host %d with a different DNS provider", d, o.ID))
+			}
+		}
+	}
+	return true
+}
+
+func sameProvider(a, b *uint) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
