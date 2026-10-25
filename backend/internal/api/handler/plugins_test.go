@@ -22,6 +22,7 @@ const (
 	customPkg   = "github.com/example/caddy-plug"
 	customMod   = "http.handlers.plug"
 	customSub   = "github.com/example/caddy-plug/extra"
+	customHTTP  = "github.com/example/caddy-plug/http"
 	notInstPkg  = "github.com/example/other"
 	notInstMod  = "http.handlers.other"
 	runningOpID = "op-running"
@@ -101,6 +102,7 @@ func newStubPlugins() *stubPlugins {
 		catalog: []pluginmgr.Package{
 			{Path: duckdnsPkg, Repo: "https://github.com/caddy-dns/duckdns", Modules: []string{duckdnsMod}},
 			{Path: customSub, Repo: "https://github.com/example/caddy-plug", Modules: []string{"http.handlers.extra"}},
+			{Path: customHTTP, Repo: "https://github.com/example/caddy-plug", Modules: []string{customMod}},
 			{Path: notInstPkg, Repo: "https://github.com/example/other", Modules: []string{notInstMod}},
 			{Path: pluginmgr.JSONSchemaPackage, Repo: "https://github.com/abiosoft/caddy-json-schema"},
 		},
@@ -277,8 +279,8 @@ func TestGetPluginCatalog(t *testing.T) {
 	h := newPluginTestHandler(t, newStubPlugins())
 
 	all := getCatalog(t, h, "")
-	if len(all) != 3 {
-		t.Fatalf("catalog = %+v, want 3 entries without json-schema", all)
+	if len(all) != 4 {
+		t.Fatalf("catalog = %+v, want 4 entries without json-schema", all)
 	}
 	byPath := map[string]catalogEntry{}
 	for _, e := range all {
@@ -287,8 +289,14 @@ func TestGetPluginCatalog(t *testing.T) {
 	if e := byPath[duckdnsPkg]; !e.Installed || !e.Tested || e.Repo == "" {
 		t.Errorf("duckdns = %+v", e)
 	}
-	if e := byPath[customSub]; !e.Installed {
-		t.Errorf("subdirectory of an installed module should be installed: %+v", e)
+	// Installed means "all of the package's Caddy modules are in the binary",
+	// not "lives in an installed Go module": another package of the same
+	// module is still installable.
+	if e := byPath[customHTTP]; !e.Installed {
+		t.Errorf("package whose modules are all installed should be installed: %+v", e)
+	}
+	if e := byPath[customSub]; e.Installed {
+		t.Errorf("sibling package of an installed module should not be installed: %+v", e)
 	}
 	if e := byPath[notInstPkg]; e.Installed || e.Tested {
 		t.Errorf("other = %+v", e)
@@ -347,7 +355,7 @@ func TestAddPlugin(t *testing.T) {
 		"empty":           "",
 		"json-schema":     pluginmgr.JSONSchemaPackage,
 		"installed":       duckdnsPkg,
-		"installed-subpk": customSub,
+		"installed-subpk": customHTTP,
 	} {
 		rec := doRequest(h.AddPlugin(), http.MethodPost, "/caddy/plugins", map[string]string{"path": path}, nil)
 		if rec.Code != http.StatusBadRequest {
@@ -362,6 +370,34 @@ func TestAddPlugin(t *testing.T) {
 	rec = doRequest(h.AddPlugin(), http.MethodPost, "/caddy/plugins", map[string]string{"path": notInstPkg}, nil)
 	if rec.Code != http.StatusConflict {
 		t.Errorf("busy: status %d, want 409", rec.Code)
+	}
+}
+
+// A second package of an already installed Go module can still be added: the
+// manager pins it to the installed module version.
+func TestAddPlugin_SiblingPackageOfInstalledModule(t *testing.T) {
+	stub := newStubPlugins()
+	h := newPluginTestHandler(t, stub)
+	rec := doRequest(h.AddPlugin(), http.MethodPost, "/caddy/plugins", map[string]string{"path": customSub}, nil)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if got := stub.startedOps(); len(got) != 1 || got[0] != "add "+customSub {
+		t.Errorf("started = %v", got)
+	}
+}
+
+// Without the catalog, a package counts as installed only on an exact path
+// match, so siblings stay installable and installed packages are still refused.
+func TestAddPlugin_CatalogUnavailable(t *testing.T) {
+	stub := newStubPlugins()
+	stub.catalogErr = errors.New("build service down")
+	h := newPluginTestHandler(t, stub)
+	if rec := doRequest(h.AddPlugin(), http.MethodPost, "/caddy/plugins", map[string]string{"path": duckdnsPkg}, nil); rec.Code != http.StatusBadRequest {
+		t.Errorf("installed: status %d, want 400", rec.Code)
+	}
+	if rec := doRequest(h.AddPlugin(), http.MethodPost, "/caddy/plugins", map[string]string{"path": customSub}, nil); rec.Code != http.StatusAccepted {
+		t.Errorf("sibling: status %d, want 202", rec.Code)
 	}
 }
 

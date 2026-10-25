@@ -137,14 +137,45 @@ func underModule(path, modPath string) bool {
 	return path == modPath || strings.HasPrefix(path, modPath+"/")
 }
 
-// isInstalled reports whether a package path belongs to an installed module.
-func isInstalled(path string, installed []pluginmgr.InstalledPackage) bool {
+// isInstalled reports whether a catalog package is already part of the Caddy
+// build: every Caddy module it provides is present. Matching by module rather
+// than by Go module path keeps sibling packages of an installed Go module (e.g.
+// another subdirectory of the same repo) installable. A package without known
+// modules counts as installed only on an exact path match.
+func isInstalled(pkg pluginmgr.Package, installed []pluginmgr.InstalledPackage) bool {
+	if len(pkg.Modules) == 0 {
+		for _, p := range installed {
+			if p.Path == pkg.Path {
+				return true
+			}
+		}
+		return false
+	}
+	have := map[string]bool{}
 	for _, p := range installed {
-		if underModule(path, p.Path) {
-			return true
+		for _, m := range p.Modules {
+			have[m] = true
 		}
 	}
-	return false
+	for _, m := range pkg.Modules {
+		if !have[m] {
+			return false
+		}
+	}
+	return true
+}
+
+// catalogPackage returns the catalog entry for a package path, or one without
+// modules (exact-path matching) when the catalog is unavailable or lacks it.
+func catalogPackage(ctx context.Context, pm PluginManager, path string) pluginmgr.Package {
+	if pkgs, err := pm.Catalog(ctx); err == nil {
+		for _, p := range pkgs {
+			if p.Path == path {
+				return p
+			}
+		}
+	}
+	return pluginmgr.Package{Path: path}
 }
 
 // startOperation starts a plugin operation and answers 202, or 409 when busy.
@@ -244,7 +275,7 @@ func (s Handler) GetPluginCatalog() func(http.ResponseWriter, *http.Request) {
 			if mods == nil {
 				mods = []string{}
 			}
-			out = append(out, catalogPlugin{Path: p.Path, Repo: p.Repo, Modules: mods, Tested: pluginmgr.IsTested(p.Path), Installed: isInstalled(p.Path, installed)})
+			out = append(out, catalogPlugin{Path: p.Path, Repo: p.Repo, Modules: mods, Tested: pluginmgr.IsTested(p.Path), Installed: isInstalled(p, installed)})
 			if len(out) == maxCatalogResults {
 				break
 			}
@@ -282,7 +313,7 @@ func (s Handler) AddPlugin() func(http.ResponseWriter, *http.Request) {
 			h.ResultErrorJSON(w, r, http.StatusInternalServerError, err.Error(), nil)
 			return
 		}
-		if isInstalled(path, installed) {
+		if isInstalled(catalogPackage(r.Context(), pm, path), installed) {
 			h.ResultErrorJSON(w, r, http.StatusBadRequest, path+" is already installed", nil)
 			return
 		}
