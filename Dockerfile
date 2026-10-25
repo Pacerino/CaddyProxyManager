@@ -37,8 +37,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
 # caddy-json-schema, which the runtime stage uses to generate the schema CPM
 # reads for DNS provider forms. CADDY_PLUGINS (a space-separated list of Go
 # module paths, optionally `@version`) adds further plugins on top.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS caddy
-ARG CADDY_VERSION=2.11.4
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS caddy
+ARG CADDY_VERSION=2.11.7
 ARG XCADDY_VERSION=0.4.5
 ARG CADDY_JSON_SCHEMA=github.com/abiosoft/caddy-json-schema@v0.0.0-20220621031927-c4d6e132f3af
 ARG CADDY_PLUGINS=""
