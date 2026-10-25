@@ -15,12 +15,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { HostPluginsSection } from "@/components/HostPluginsSection";
-import type { Host } from "@/lib/types";
+import type { DNSProvider, Host } from "@/lib/types";
 
 const schema = z.object({
   matcher: z.string().optional(),
   domains: z.array(z.object({ value: z.string().min(1) })).min(1),
   upstreams: z.array(z.object({ backend: z.string().min(1) })).min(1),
+  // The select yields a string; "" means the default HTTP challenge.
+  dnsProviderId: z.string(),
 });
 
 export type HostFormValues = z.infer<typeof schema>;
@@ -29,12 +31,15 @@ export interface HostPayload {
   domains: string;
   matcher: string;
   upstreams: { backend: string }[];
+  dnsProviderId: number | null;
 }
 
 interface HostDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   host: Host | null;
+  // null hides the provider select (Caddyfile mode).
+  dnsProviders: DNSProvider[] | null;
   submitting: boolean;
   onSubmit: (payload: HostPayload) => void;
 }
@@ -45,6 +50,7 @@ function toFormValues(host: Host | null): HostFormValues {
       matcher: "",
       domains: [{ value: "" }],
       upstreams: [{ backend: "" }],
+      dnsProviderId: "",
     };
   }
   return {
@@ -56,6 +62,7 @@ function toFormValues(host: Host | null): HostFormValues {
       host.Upstreams?.length > 0
         ? host.Upstreams.map((u) => ({ backend: u.backend }))
         : [{ backend: "" }],
+    dnsProviderId: host.dnsProviderId != null ? String(host.dnsProviderId) : "",
   };
 }
 
@@ -63,6 +70,7 @@ export function HostDialog({
   open,
   onOpenChange,
   host,
+  dnsProviders,
   submitting,
   onSubmit,
 }: HostDialogProps) {
@@ -89,6 +97,7 @@ export function HostDialog({
       matcher: data.matcher ?? "",
       domains: data.domains.map((d) => d.value).join(" "),
       upstreams: data.upstreams,
+      dnsProviderId: data.dnsProviderId ? Number(data.dnsProviderId) : null,
     });
   });
 
@@ -177,6 +186,28 @@ export function HostDialog({
               Add upstream
             </Button>
           </div>
+
+          {dnsProviders && (
+            <div className="space-y-2">
+              <Label htmlFor="dns-provider">DNS provider</Label>
+              <select
+                id="dns-provider"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                {...register("dnsProviderId")}
+              >
+                <option value="">Default (HTTP challenge)</option>
+                {dnsProviders.map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Issue the certificate with a DNS challenge, e.g. for wildcard
+                domains.
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="submit" disabled={submitting}>

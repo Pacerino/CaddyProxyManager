@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, unwrap, type ApiEnvelope } from "@/lib/api";
-import type { Host } from "@/lib/types";
+import type { DNSProvider, Host } from "@/lib/types";
 import { HostDialog, type HostPayload } from "@/components/HostDialog";
 
 export function HostsPage() {
@@ -20,6 +20,8 @@ export function HostsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Host | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // null when the DNS provider API is unavailable (Caddyfile mode).
+  const [dnsProviders, setDnsProviders] = useState<DNSProvider[] | null>(null);
 
   const loadHosts = useCallback(async () => {
     setLoading(true);
@@ -36,6 +38,13 @@ export function HostsPage() {
   useEffect(() => {
     loadHosts();
   }, [loadHosts]);
+
+  useEffect(() => {
+    api
+      .get<ApiEnvelope<DNSProvider[]>>("/caddy/dns-providers")
+      .then((res) => setDnsProviders(unwrap(res.data) ?? []))
+      .catch(() => setDnsProviders(null));
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -55,6 +64,7 @@ export function HostsPage() {
           ...editing,
           domains: payload.domains,
           matcher: payload.matcher,
+          dnsProviderId: payload.dnsProviderId,
           Upstreams: payload.upstreams.map((u) => ({ backend: u.backend })),
         });
         toast.success("Host updated");
@@ -62,6 +72,7 @@ export function HostsPage() {
         await api.post("/hosts", {
           domains: payload.domains,
           matcher: payload.matcher,
+          dnsProviderId: payload.dnsProviderId,
           Upstreams: payload.upstreams,
         });
         toast.success("Host created");
@@ -128,7 +139,17 @@ export function HostsPage() {
               hosts.map((host) => (
                 <TableRow key={host.ID}>
                   <TableCell>{host.ID}</TableCell>
-                  <TableCell className="font-medium">{host.domains}</TableCell>
+                  <TableCell className="font-medium">
+                    {host.domains}
+                    {dnsProviders === null && host.dnsProviderId != null && (
+                      <span title="DNS provider ignored in Caddyfile mode">
+                        <TriangleAlert
+                          className="ml-2 inline size-4 text-amber-500"
+                          aria-label="DNS provider ignored in Caddyfile mode"
+                        />
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>{host.matcher || "—"}</TableCell>
                   <TableCell>
                     {host.Upstreams?.map((u) => u.backend).join(", ") || "—"}
@@ -162,6 +183,7 @@ export function HostsPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         host={editing}
+        dnsProviders={dnsProviders}
         submitting={submitting}
         onSubmit={saveHost}
       />

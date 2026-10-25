@@ -47,4 +47,22 @@ describe("SchemaFields", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     expect(onChange).toHaveBeenLastCalledWith({ ...values, enabled: false });
   });
+
+  it("emits a string array for stringlist fields", () => {
+    const listFields: SchemaField[] = [
+      { key: "zones", label: "Zones", type: "stringlist" },
+    ];
+    const onChange = vi.fn();
+    render(
+      <SchemaFields
+        fields={listFields}
+        values={defaultFieldValues(listFields)}
+        onChange={onChange}
+      />
+    );
+    fireEvent.change(screen.getByLabelText(/Zones/i), {
+      target: { value: "a, b" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ zones: ["a", "b"] });
+  });
 });

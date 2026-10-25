@@ -17,6 +17,7 @@ import type {
   ModuleConfig,
   PluginSchema,
 } from "@/lib/types";
+import { DNSProvidersSection } from "@/components/DNSProvidersSection";
 import {
   PluginDialog,
   type ModuleConfigPayload,
@@ -51,7 +52,12 @@ export function PluginsPage() {
         api.get<ApiEnvelope<CaddyModulesResponse>>("/caddy/modules"),
         api.get<ApiEnvelope<PluginSchema[]>>("/caddy/schemas"),
       ]);
-      setPlugins(unwrap(mods.data)?.plugins ?? []);
+      // DNS provider modules are managed in the DNS providers section.
+      setPlugins(
+        (unwrap(mods.data)?.plugins ?? []).filter(
+          (m) => !m.id.startsWith("dns.providers.")
+        )
+      );
       setSchemas(unwrap(schemaRes.data) ?? []);
     } catch {
       toast.error("Failed to detect Caddy modules");
@@ -117,6 +123,8 @@ export function PluginsPage() {
           here; per-host plugins (e.g. authentication) are set in the host editor.
         </p>
       </div>
+
+      <DNSProvidersSection />
 
       {unavailable && (
         <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">

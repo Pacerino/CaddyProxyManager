@@ -30,7 +30,7 @@ api.interceptors.response.use(
 // The backend wraps payloads as { result, error }.
 export interface ApiEnvelope<T> {
   result: T;
-  error?: { code: number; message: string };
+  error?: { code: number; message: string; invalid?: unknown };
 }
 
 export function unwrap<T>(data: ApiEnvelope<T>): T {
