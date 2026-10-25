@@ -5,6 +5,7 @@ package pluginmgr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -70,8 +71,21 @@ type BuildService struct {
 func NewBuildService() *BuildService {
 	return &BuildService{
 		BaseURL: defaultBaseURL,
-		Client:  &http.Client{Timeout: downloadTimeout},
+		Client:  &http.Client{Timeout: downloadTimeout, CheckRedirect: httpsOnlyRedirect},
 	}
+}
+
+// httpsOnlyRedirect follows redirects (at most 10, like the default) only to
+// https URLs: the downloads carry no signature, so HTTPS is their only
+// protection.
+func httpsOnlyRedirect(req *http.Request, via []*http.Request) error {
+	if req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect to non-https URL %s", req.URL.Redacted())
+	}
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return nil
 }
 
 // Packages lists the available plugins. Successful results are cached for
