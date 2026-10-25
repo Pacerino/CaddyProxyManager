@@ -222,7 +222,7 @@ On the **Plugins** page you can add or remove Caddy plugins without rebuilding t
 
 ### systemd setup
 
-Without Docker, Caddy runs under systemd and CPM can only restart the service, so the unit must start CPM's managed binary. CPM never touches the system binary (e.g. `/usr/bin/caddy`): when it starts, it copies the configured Caddy (`CPM_CADDY_BINARY`) into `<CPM_DATAFOLDER>/caddy-bin/` and makes that copy the managed binary (`caddy-bin/current`), so the unit keeps running the same Caddy after the switch. The copy is kept as the *seed*: whenever CPM has to fall back, it points `current` at the seed again instead of removing it.
+Without Docker, Caddy runs under systemd and CPM can only restart the service, so the unit must start CPM's managed binary. CPM never touches the system binary (e.g. `/usr/bin/caddy`): when plugin install is enabled (`CPM_PLUGIN_INSTALL`, the default), CPM copies the configured Caddy on start (`CPM_CADDY_BINARY`) into `<CPM_DATAFOLDER>/caddy-bin/` and makes that copy the managed binary (`caddy-bin/current`), so the unit keeps running the same Caddy after the switch. The copy is kept as the *seed*: whenever CPM has to fall back, it points `current` at the seed again instead of removing it.
 
 The Plugins page then shows the exact drop-in to install; it looks like this (adjust the path to your `CPM_DATAFOLDER`, keep your original arguments):
 
