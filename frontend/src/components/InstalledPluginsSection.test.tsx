@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { InstalledPluginsSection } from "./InstalledPluginsSection";
-import { AddPluginDialog } from "./AddPluginDialog";
+import { AddPluginDialog, CADDY_UPDATE_NOTE } from "./AddPluginDialog";
 import { PluginOperationProgress } from "./PluginOperationProgress";
 import { api } from "@/lib/api";
 import type { PluginOperation, PluginsState } from "@/lib/types";
@@ -66,6 +66,15 @@ describe("AddPluginDialog", () => {
     expect(post).toHaveBeenCalledWith("/caddy/plugins", { path: "github.com/b/untested" });
   });
 
+  it("says that Caddy itself may be updated", async () => {
+    mockGet(baseState, catalog);
+    render(<AddPluginDialog open onOpenChange={() => {}} onStarted={() => {}} />);
+    expect(await screen.findByText(CADDY_UPDATE_NOTE)).toBeTruthy();
+    expect(CADDY_UPDATE_NOTE).toBe(
+      "If a newer Caddy release is available, Caddy is updated to it as part of this change."
+    );
+  });
+
   it("shows an unavailable state when the catalog is unreachable", async () => {
     get.mockRejectedValue({ response: { status: 503, data: { error: { message: "build service down" } } } });
     render(<AddPluginDialog open onOpenChange={() => {}} onStarted={() => {}} />);
@@ -97,8 +106,32 @@ describe("InstalledPluginsSection", () => {
     });
     render(<InstalledPluginsSection />);
     fireEvent.click(await screen.findByRole("button", { name: /remove github.com\/caddy-dns/i }));
+    expect(screen.getByText(CADDY_UPDATE_NOTE)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /remove & restart caddy/i }));
     expect(await screen.findByText("Used by DNS provider 'CF'")).toBeTruthy();
+  });
+
+  it("keeps showing the last failed change", async () => {
+    mockGet({
+      ...baseState,
+      lastFailed: op({ kind: "fallback", package: "", step: "failed", error: "exec format error" }),
+    });
+    render(<InstalledPluginsSection />);
+    const banner = await screen.findByRole("alert");
+    expect(banner.textContent).toMatch(/exec format error/);
+  });
+
+  it("does not repeat a failed update in a second banner", async () => {
+    const failed = op({ kind: "update", step: "rolledBack", error: "boom" });
+    mockGet({
+      ...baseState,
+      update: { available: true, managed: "2.8.0", shipped: "2.9.0" },
+      lastUpdate: failed,
+      lastFailed: failed,
+    });
+    render(<InstalledPluginsSection />);
+    expect(await screen.findByText(/was rolled back: boom/)).toBeTruthy();
+    expect(screen.getAllByText(/boom/)).toHaveLength(1);
   });
 
   it("shows the drop-in when setup is needed", async () => {
@@ -144,6 +177,51 @@ describe("InstalledPluginsSection", () => {
 });
 
 describe("PluginOperationProgress", () => {
+  it("says when Caddy itself was updated", async () => {
+    const onFinished = vi.fn();
+    render(
+      <PluginOperationProgress
+        operation={op({ step: "done", caddyVersion: "v2.12.0", previousCaddyVersion: "v2.11.7" })}
+        onFinished={onFinished}
+      />
+    );
+    expect(screen.getByRole("status").textContent).toMatch(/Caddy updated to v2\.12\.0/);
+  });
+
+  it("does not mention a Caddy update when the version stayed", async () => {
+    render(
+      <PluginOperationProgress
+        operation={op({ step: "done", caddyVersion: "v2.11.7", previousCaddyVersion: "v2.11.7" })}
+        onFinished={() => {}}
+      />
+    );
+    expect(screen.getByRole("status").textContent).not.toMatch(/Caddy updated/);
+  });
+
+  it("stops polling when the operation is gone", async () => {
+    vi.useFakeTimers();
+    get.mockRejectedValue({ response: { status: 404 } });
+    const onFinished = vi.fn();
+    render(<PluginOperationProgress operation={op()} onFinished={onFinished} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(screen.getByRole("status").textContent).toBe(
+      "Operation no longer available (CPM restarted?)"
+    );
+    expect(onFinished).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps polling through other errors", async () => {
+    vi.useFakeTimers();
+    get.mockRejectedValueOnce({ response: { status: 502 } }).mockReturnValue(ok(op({ step: "done" })));
+    const onFinished = vi.fn();
+    render(<PluginOperationProgress operation={op()} onFinished={onFinished} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
   it("polls and renders rolledBack with the error, then calls onFinished", async () => {
     vi.useFakeTimers();
     get.mockReturnValue(ok(op({ step: "rolledBack", error: "caddy did not start" })));

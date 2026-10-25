@@ -108,7 +108,9 @@ export interface DNSProvider {
   available: boolean;
 }
 
-export type PluginOpKind = "add" | "remove" | "update";
+// "fallback" records that CPM switched back to the shipped Caddy because the
+// managed binary could not run.
+export type PluginOpKind = "add" | "remove" | "update" | "fallback";
 export type PluginOpStep =
   | "requesting"
   | "downloading"
@@ -126,6 +128,9 @@ export interface PluginOperation {
   package: string;
   step: PluginOpStep;
   error?: string;
+  // The Caddy version of the new binary and of the one it replaced.
+  caddyVersion?: string;
+  previousCaddyVersion?: string;
   startedAt: string;
   finishedAt?: string;
 }
@@ -152,6 +157,8 @@ export interface PluginsState {
   autoUpdate: boolean;
   operation?: PluginOperation;
   lastUpdate?: PluginOperation;
+  // The most recent finished change if it failed, until one succeeds.
+  lastFailed?: PluginOperation;
 }
 
 export interface CatalogPlugin {

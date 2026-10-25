@@ -15,6 +15,17 @@ const FINAL: PluginOpStep[] = ["done", "rolledBack", "failed"];
 
 export const isFinished = (op: PluginOperation) => FINAL.includes(op.step);
 
+export const GONE_MESSAGE = "Operation no longer available (CPM restarted?)";
+
+// caddyUpdate names the new Caddy version when a finished operation changed it.
+const caddyUpdate = (op: PluginOperation) =>
+  op.step === "done" &&
+  op.caddyVersion &&
+  op.previousCaddyVersion &&
+  op.caddyVersion !== op.previousCaddyVersion
+    ? op.caddyVersion
+    : "";
+
 interface Props {
   operation: PluginOperation;
   onFinished: (op: PluginOperation) => void;
@@ -25,12 +36,15 @@ interface Props {
 // backend rolls back, so only the current step is highlighted.
 export function PluginOperationProgress({ operation, onFinished }: Props) {
   const [op, setOp] = useState(operation);
+  // The backend forgot the operation (404), e.g. because CPM restarted.
+  const [gone, setGone] = useState(false);
   const finished = useRef(false);
   const callback = useRef(onFinished);
   callback.current = onFinished;
 
   useEffect(() => {
     setOp(operation);
+    setGone(false);
     finished.current = false;
   }, [operation.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -57,8 +71,14 @@ export function PluginOperationProgress({ operation, onFinished }: Props) {
           clearInterval(timer);
           finish(next);
         }
-      } catch {
-        // Caddy restarts can briefly drop requests; keep polling.
+      } catch (err) {
+        if (cancelled) return;
+        if ((err as { response?: { status?: number } }).response?.status === 404) {
+          clearInterval(timer);
+          setGone(true);
+          finish({ ...operation, step: "failed", error: GONE_MESSAGE });
+        }
+        // Caddy restarts can briefly drop other requests; keep polling.
       }
     }, 1000);
     return () => {
@@ -72,7 +92,11 @@ export function PluginOperationProgress({ operation, onFinished }: Props) {
   return (
     <div className="rounded-lg border border-border p-4 space-y-3" data-testid="plugin-progress">
       <div className="text-sm font-medium">{title}</div>
-      {isFinished(op) ? (
+      {gone ? (
+        <div role="status" className="flex items-center gap-2 text-sm text-destructive">
+          {GONE_MESSAGE}
+        </div>
+      ) : isFinished(op) ? (
         <div
           role="status"
           className={
@@ -88,6 +112,7 @@ export function PluginOperationProgress({ operation, onFinished }: Props) {
           )}
           <span>
             {op.step === "done" && "Done"}
+            {caddyUpdate(op) && ` (Caddy updated to ${caddyUpdate(op)})`}
             {op.step === "rolledBack" &&
               "Rolled back to your previous Caddy"}
             {op.step === "failed" && "Failed"}

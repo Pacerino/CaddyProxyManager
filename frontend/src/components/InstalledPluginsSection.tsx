@@ -25,7 +25,11 @@ import type {
   PluginsState,
   PluginUsage,
 } from "@/lib/types";
-import { AddPluginDialog, RESTART_NOTE } from "@/components/AddPluginDialog";
+import {
+  AddPluginDialog,
+  CADDY_UPDATE_NOTE,
+  RESTART_NOTE,
+} from "@/components/AddPluginDialog";
 import { PluginOperationProgress, isFinished } from "@/components/PluginOperationProgress";
 
 interface ApiError {
@@ -51,6 +55,20 @@ const usageLabel = (u: PluginUsage) => {
       return `Used by module configuration '${u.name}'`;
     default:
       return `Used by '${u.name}'`;
+  }
+};
+
+const failureLabel = (op: PluginOperation) => {
+  const outcome = op.step === "rolledBack" ? "was rolled back" : "failed";
+  switch (op.kind) {
+    case "fallback":
+      return "Caddy switched back to the shipped binary";
+    case "update":
+      return `The last update ${outcome}`;
+    case "remove":
+      return `Removing ${op.package} ${outcome}`;
+    default:
+      return `Installing ${op.package} ${outcome}`;
   }
 };
 
@@ -157,6 +175,14 @@ export function InstalledPluginsSection({ onChanged }: Props) {
     (state.lastUpdate.step === "failed" || state.lastUpdate.step === "rolledBack")
       ? state.lastUpdate
       : null;
+  // The last failed change of any kind, unless the update banner or the
+  // progress panel already shows it.
+  const lastChangeFailed =
+    state?.lastFailed &&
+    !(state.update.available && state.lastFailed.id === lastFailed?.id) &&
+    state.lastFailed.id !== operation?.id
+      ? state.lastFailed
+      : null;
 
   return (
     <section className="space-y-3">
@@ -211,6 +237,15 @@ export function InstalledPluginsSection({ onChanged }: Props) {
                     </Button>
                   </>
                 )}
+              </div>
+            )}
+            {lastChangeFailed && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {failureLabel(lastChangeFailed)}
+                {lastChangeFailed.error ? `: ${lastChangeFailed.error}` : ""}
               </div>
             )}
             {state.update.available && (
@@ -335,6 +370,7 @@ export function InstalledPluginsSection({ onChanged }: Props) {
             </div>
           )}
           <p className="text-sm text-muted-foreground">{RESTART_NOTE}</p>
+          <p className="text-sm text-muted-foreground">{CADDY_UPDATE_NOTE}</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoving(null)}>
               Cancel

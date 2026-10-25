@@ -23,6 +23,8 @@ export const UNTESTED_WARNING =
   "This plugin hasn't been tested with CPM. Its settings may only be editable as raw JSON, and it might fail to start. If Caddy doesn't come up with it, CPM switches back to your previous Caddy automatically.";
 export const RESTART_NOTE =
   "All hosts are briefly unavailable while Caddy restarts.";
+export const CADDY_UPDATE_NOTE =
+  "If a newer Caddy release is available, Caddy is updated to it as part of this change.";
 
 interface ApiError {
   response?: { status?: number; data?: { error?: { message?: string } } };
@@ -155,6 +157,7 @@ export function AddPluginDialog({ open, onOpenChange, onStarted }: Props) {
           </div>
         )}
         <p className="text-sm text-muted-foreground">{RESTART_NOTE}</p>
+        <p className="text-sm text-muted-foreground">{CADDY_UPDATE_NOTE}</p>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
