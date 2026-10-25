@@ -41,3 +41,6 @@ frontend/yarn-error.log*
 backend/embed/assets
 
 .vscode
+
+# local working data of AI-assisted development (plans ledgers, reviews, mockups)
+.superpowers/
