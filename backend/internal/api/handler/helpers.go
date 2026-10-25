@@ -16,7 +16,7 @@ var validate = newValidator()
 func newValidator() *validator.Validate {
 	v := validator.New()
 	// "domains" validates a space/comma separated list where each entry is a
-	// valid FQDN or host:port.
+	// valid FQDN (optionally with a leading *. wildcard label) or host:port.
 	_ = v.RegisterValidation("domains", func(fl validator.FieldLevel) bool {
 		fields := strings.FieldsFunc(fl.Field().String(), func(r rune) bool {
 			return r == ' ' || r == ',' || r == '\t'
@@ -25,6 +25,8 @@ func newValidator() *validator.Validate {
 			return false
 		}
 		for _, d := range fields {
+			// A single leading wildcard label is allowed (*.example.com).
+			d = strings.TrimPrefix(d, "*.")
 			if v.Var(d, "fqdn") != nil && v.Var(d, "hostname_port") != nil {
 				return false
 			}
