@@ -38,6 +38,9 @@ type caddy struct {
 	// SchemaFile is the path to Caddy's JSON schema (`caddy json-schema`
 	// output), used to generate DNS provider forms.
 	SchemaFile string `json:"schema_file" envconfig:"optional,default=/usr/share/cpm/caddy_schema.json"`
+	// Supervise makes CPM start and supervise the Caddy process itself
+	// (CPM_CADDY_SUPERVISE).
+	Supervise bool `json:"supervise" envconfig:"optional,default=false"`
 }
 
 // oidc holds the OpenID Connect / OAuth2 configuration used when the auth
@@ -75,12 +78,15 @@ type admin struct {
 
 // Configuration is the main configuration object
 var Configuration struct {
-	DataFolder  string `json:"data_folder" envconfig:"optional,default=/etc/caddy/"`
-	LogFolder   string `json:"log_folder" envconfig:"optional,default=/var/log/caddy"`
-	CaddyFile   string `json:"caddy_file" envconfig:"optional,default=/etc/caddy/Caddyfile"`
-	FrontendDir string `json:"frontend_dir" envconfig:"optional"`
-	Caddy       caddy  `json:"caddy"`
-	Auth        auth   `json:"auth"`
-	Admin       admin  `json:"admin"`
-	Log         log    `json:"log"`
+	DataFolder string `json:"data_folder" envconfig:"optional,default=/etc/caddy/"`
+	LogFolder  string `json:"log_folder" envconfig:"optional,default=/var/log/caddy"`
+	CaddyFile  string `json:"caddy_file" envconfig:"optional,default=/etc/caddy/Caddyfile"`
+	// PluginInstall enables installing Caddy plugins from the UI
+	// (CPM_PLUGIN_INSTALL; envconfig splits PluginInstall at the word boundary).
+	PluginInstall bool   `json:"plugin_install" envconfig:"optional,default=true"`
+	FrontendDir   string `json:"frontend_dir" envconfig:"optional"`
+	Caddy         caddy  `json:"caddy"`
+	Auth          auth   `json:"auth"`
+	Admin         admin  `json:"admin"`
+	Log           log    `json:"log"`
 }

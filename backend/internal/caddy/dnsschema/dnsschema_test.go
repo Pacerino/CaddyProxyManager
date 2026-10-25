@@ -313,3 +313,32 @@ func TestResolver_CancelledContextNotCached(t *testing.T) {
 		t.Fatalf("second: %+v %v", second, err)
 	}
 }
+
+func TestSchemaFileFor(t *testing.T) {
+	dir := t.TempDir()
+	const shipped = "/usr/share/cpm/caddy_schema.json"
+	schemaPath := filepath.Join(dir, "caddy_schema.json")
+	sidecar := filepath.Join(dir, "caddy_schema.sha256")
+
+	if got := SchemaFileFor(dir, "abc", shipped); got != shipped {
+		t.Fatalf("missing files: got %q", got)
+	}
+	if err := os.WriteFile(schemaPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := SchemaFileFor(dir, "abc", shipped); got != shipped {
+		t.Fatalf("missing sidecar: got %q", got)
+	}
+	if err := os.WriteFile(sidecar, []byte("abc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := SchemaFileFor(dir, "abc", shipped); got != schemaPath {
+		t.Fatalf("matching sidecar: got %q", got)
+	}
+	if got := SchemaFileFor(dir, "def", shipped); got != shipped {
+		t.Fatalf("mismatch: got %q", got)
+	}
+	if got := SchemaFileFor(dir, "", shipped); got != shipped {
+		t.Fatalf("empty sha: got %q", got)
+	}
+}
