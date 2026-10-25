@@ -98,17 +98,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Only push on master pushes and version tags, not on PRs.
+      # Images are only published for version tags; PRs and master pushes
+      # just build them to verify.
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # `latest` (and `latest-dns`) follow the newest stable release tag;
-      # `master` (and `master-dns`) follow the default branch.
+      # `latest` (and `latest-dns`) follow the newest stable release tag.
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -118,11 +118,8 @@ jobs:
             latest=auto
             suffix=${{ matrix.suffix }},onlatest=true
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -130,7 +127,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |

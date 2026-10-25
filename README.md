@@ -57,10 +57,9 @@ Images are published for `linux/amd64` and `linux/arm64` in two flavors:
 | --- | --- |
 | `latest`, `<version>`, `<major>.<minor>` | Newest stable release with the stock Caddy build. |
 | `latest-dns`, `<version>-dns`, … | Same, with Caddy built with the [`cloudflare`](https://github.com/caddy-dns/cloudflare), [`duckdns`](https://github.com/caddy-dns/duckdns) and [`porkbun`](https://github.com/caddy-dns/porkbun) DNS providers for ACME DNS-01 challenges. |
-| `master`, `master-dns` | Bleeding edge, built from every commit on `master`. |
 
 > [!NOTE]
-> `latest` only exists once a stable (non-prerelease) version has been tagged. Use `master` until then.
+> Images are only published for version tags. Pre-releases (e.g. `v3.2.0-rc1`) get their exact version tag but never move `latest`.
 
 ## 🏗️ How it works
 
@@ -150,7 +149,7 @@ cd frontend && npm run test       # frontend unit tests
 cd frontend && npm run build      # frontend type-check + build
 ```
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on GitHub-hosted runners. It runs the backend and frontend tests, builds the multi-arch Docker images (both flavors) on every PR, and publishes them to GHCR on pushes to `master` and version tags. Version tags (`v*`) also produce cross-compiled binaries and a GitHub release.
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on GitHub-hosted runners. It runs the backend and frontend tests, and builds the multi-arch Docker images (both flavors) on every PR and push to `master`. Nothing is published automatically: only pushing a version tag (`v*`) publishes the images to GHCR and creates a GitHub release with cross-compiled binaries.
 
 ## 🐳 Building the image yourself
 
